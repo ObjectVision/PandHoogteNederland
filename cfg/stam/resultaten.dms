@@ -1,0 +1,64 @@
+container Resultaten: Using = "Eenheden;Klassificaties;Brondata;Geografie"
+,	IntegrityCheck = "Brondata/BAG/snapshotdate == '20230101' && Brondata/AHN4/AHN_version == 'AHN_4'" // if new BAG or AH Data is used, alway rerun : /Brondata/Make_blad_ahn_with_bag_data/Generate and edit IntegrityCheck.
+{ 
+	container AHN_data_per_BAG_blad := schemas/verwerk_AHNSet('AHN4', brondata/blad_ahn_with_bag_data);
+
+	#include<data_heel_nederland.dms>
+	
+	container vergelijk
+	{
+		container AHN3
+		{
+			unit<uint32> pand_plus : StorageName = "D:/SourceData/PHN/PHN_20210101.fss", StorageReadOnly = "True"
+			{
+				attribute<string>    identificatie;
+				attribute<uint16>    bouwjaar := rjoin(identificatie, Brondata/BAG/pand/identificatie, Brondata/BAG/pand/bouwjaar);
+				
+				attribute<cm_uint16> hoogte;
+				attribute<cm_uint16> hoogte_nok;
+				attribute<cm>        hoogte_maaiveld;
+				attribute<bool>      IsAHN3;
+				attribute<int16>     AHN_inwinjaar;
+				
+				attribute<string>    ObjectTypeCode := substr(identificatie,4,2);
+				attribute<bool>      IsLigplaats    := ObjectTypeCode == '02';
+				attribute<bool>      IsVoor2017     := bouwjaar < 2017[uint16];
+			}
+			unit<uint32> pand_plus_zonder_ligplaats := select_many(pand_plus, !pand_plus/IsLigplaats && pand_plus/IsVoor2017);
+		}
+		container AHN4
+		{
+			unit<uint32> pand_plus : StorageName = "%SourceDataDir%/AHN/PHN_20230101_new.fss", StorageReadOnly = "True"
+			{
+				attribute<string>    identificatie;
+				attribute<cm_uint16> hoogte;
+				attribute<cm_uint16> hoogte_nok;
+				attribute<cm>        hoogte_maaiveld;
+				attribute<bool>      IsAHN4;
+				attribute<string>    AHN_inwinjaar;
+			}
+			unit<uint32> missing:= select_many(pand_plus,isNull(pand_plus/hoogte))
+			{
+				attribute<Geografie/point_rd> geometry (poly):= rjoin(identificatie,  Brondata/BAG/pand_plus/identificatie, Brondata/BAG/pand_plus/geometry);
+			}
+		}
+		
+		container resultaat
+		{
+			attribute<string>    identificatie   (AHN3/pand_plus_zonder_ligplaats) := AHN3/pand_plus_zonder_ligplaats/identificatie;
+			attribute<cm_uint16> hoogte_AHN3     (AHN3/pand_plus_zonder_ligplaats) := AHN3/pand_plus_zonder_ligplaats/hoogte;
+			attribute<cm_uint16> hoogte_AHN4     (AHN3/pand_plus_zonder_ligplaats) := rjoin(identificatie, AHN4/pand_plus/identificatie, AHN4/pand_plus/hoogte);
+			attribute<int32>     delta_pand_plus (AHN3/pand_plus_zonder_ligplaats) := int32(hoogte_AHN4) - int32(hoogte_AHN3);
+			attribute<bool>      both_null       (AHN3/pand_plus_zonder_ligplaats) := isNull(hoogte_AHN3) && isNull(hoogte_AHN4);
+			attribute<bool>      delta_1m_meer   (AHN3/pand_plus_zonder_ligplaats) := abs(delta_pand_plus) >= 100[int32];
+
+			attribute<bool>      opvallend       (AHN3/pand_plus_zonder_ligplaats) := !both_null && delta_1m_meer;
+
+			unit<uint32> opvallend_selectie := select_many(resultaat, opvallend)
+			{
+				attribute<Geografie/point_rd> geometry (poly):= rjoin(identificatie,  Brondata/BAG/pand_plus/identificatie, Brondata/BAG/pand_plus/geometry);
+			}
+
+		}
+	}
+}

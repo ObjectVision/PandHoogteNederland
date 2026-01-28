@@ -1,0 +1,35 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                  //
+//                                                                                                  //
+//        Configuratie voor het genereren van Pand Hoogte Nederland (PHN)                           //
+//                                                                                                  //
+//                              Object Vision 2023                                                  //
+//                                                                                                  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                  //
+//          Hoofd configuratiebestand met verwijzingen naar specifieke bestanden                    //
+//                                                                                                  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+container PHN
+{
+	container Parameters
+	{
+		parameter<string> BAG_Date := '20260101';
+	}
+	
+	#include <eenheden.dms>
+	#include <klassificaties.dms>
+	#include <geografie.dms>
+	#include <brondata.dms>
+	#include <schemas.dms>
+	#include <resultaten.dms>
+	container ConfigSettings
+	{
+		container Overridable
+		{
+			parameter<string> AHNDrive    := 'D:/SourceData/AHN';
+			parameter<string> BAG_DataDir := 'E:/SourceData/BAG';
+		}
+	}
+}

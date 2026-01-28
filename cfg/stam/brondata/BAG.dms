@@ -1,0 +1,83 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                  //
+//                                                                                                  //
+//        Configuratie voor het genereren van vastgoed informatie voor EDM                          //
+//                                                                                                  //
+//                              Object Vision 2023                                                  //
+//                                                                                                  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                  //
+//                  Configuratiebestand met brondata > BAG                                          //
+//                  Data wordt gelezen uit een snapshot die met de BAG                              //
+//                  verwerkingsscripts zijn gemaakt                                                 //
+//                                                                                                  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG
+{
+	//VERANDER JE DE BAG DATUM, MAAR STAAN ER NOG OUDE AHN BLADEN IN LOCAL DATA? DIE EERST WEGGOOIEN?
+	parameter<string> snapshotdate := Parameters/BAG_Date;
+	parameter<string> snapshotdir  := '%BAG_DataDir%/snapshots.ext/' + snapshotdate;
+
+	container impl
+	{
+		unit<uint32> pand_plus_alle := union_unit(pand, standplaats)
+		{
+			attribute<string>      identificatie      := union_data(., pand/identificatie, standplaats/identificatie) ;
+			attribute<point_rd_mm> geometry_mm (poly) := union_data(., pand/geometry_mm  , standplaats/geometry_mm);
+			attribute<point_rd>    geometry(poly)     := union_data(., pand/geometry     , standplaats/geometry);
+			attribute<m2>          area               := area(geometry, m2);
+
+			container bbox
+			{
+				attribute<point_rd> lb  (pand_plus_alle) := lower_bound(geometry);
+				attribute<point_rd> ub  (pand_plus_alle) := upper_bound(geometry);
+				attribute<m> dx         (pand_plus_alle) := pointCol(ub)[m] - pointCol(lb)[m];
+				attribute<m> dy         (pand_plus_alle) := pointRow(ub)[m] - pointRow(lb)[m];
+				attribute<bool> teGroot (pand_plus_alle) := dx > 2000[m] || dy > 2000[m];
+			}
+		}
+	}
+	
+	unit<uint32> pand
+	:	StorageName     = "= snapshotdir + '/pand.fss'"
+	,	StorageReadOnly = "True"
+	,	SyncMode        = "None"
+	{
+		attribute<string>      identificatie;
+		attribute<point_rd_mm> geometry_mm  (poly);
+		attribute<point_rd>    geometry     (poly) := geometry_mm[point_rd];
+		attribute<uint16>      bouwjaar;
+	}
+
+	unit<uint32> standplaats
+	:	StorageName     = "= snapshotdir + '/standplaats.fss'"
+	,	StorageReadOnly = "True"
+	,	SyncMode        = "None"
+	{
+		attribute<string>             identificatie;
+		attribute<point_rd_mm>        geometry_mm (poly);
+		attribute<point_rd>           geometry    (poly) := geometry_mm[point_rd];
+	}
+
+	unit<uint32> pand_plus := select_with_attr_by_cond(impl/pand_plus_alle, !impl/pand_plus_alle/bbox/teGroot && impl/pand_plus_alle/area > 0.01[m2])
+	{
+		container bbox
+		{
+			attribute<point_rd> lb (pand_plus) := lower_bound(geometry);
+			attribute<point_rd> ub (pand_plus) := upper_bound(geometry);
+			attribute<m> dx        (pand_plus) := pointCol(ub)[m] - pointCol(lb)[m];
+			attribute<m> dy        (pand_plus) := pointRow(ub)[m] - pointRow(lb)[m];
+
+			attribute<m> x_min     (pand_plus) := PointCol(lb)[m];
+			attribute<m> x_max     (pand_plus) := PointCol(ub)[m];
+			attribute<m> y_min     (pand_plus) := PointRow(lb)[m];
+			attribute<m> y_max     (pand_plus) := PointRow(ub)[m];
+		}
+		attribute<point_rd>                   centroid              := point_xy(bbox/x_min + 0.5d * bbox/dx, bbox/y_min + 0.5d * bbox/dy, point_rd); // de centroid_or_mid geeft incorrecte resultaten voor sommige geometrieen.
+
+		attribute<Geografie/blad_grid/domain> blad_grid_rel         := centroid[Geografie/blad_grid/domain];
+		attribute<Brondata/bag_blad>          blad_rel              := rlookup(blad_grid_rel, Brondata/bag_blad/values);
+		attribute<AHN4/blad>                  blad_src_rel          := point_in_polygon(centroid, Brondata/AHN4/blad/geometry);
+	}
+}

@@ -1,0 +1,9 @@
+container Eenheden
+{
+	unit<int32>   mm         := int32(0.001 * m)       ,label = "millimeter";
+	unit<float64> m          := baseunit('m', float64) ,label = "meter";
+	unit<float64> m2         := m * m                  ,label = "meter2" , cdf = "Klassificaties/cl/m2/ClassBreaks";
+	unit<float64> cm         := 0.01 * m               ,label = "centimeter";
+	unit<uint16>  cm_uint16  := uint16(cm)             ,label = "centimeter uint16";
+	unit<int16>   jaar;
+}

@@ -1,0 +1,163 @@
+container AHN4
+{
+// bij nieuwe AHN of toevoegingen aan AHN, maak eerst bestand: %AHNDrive%/AHN4/dir_list.txt opnieuw aan met commando: dir /S /B > dir_list.txt in de %AHNDrive%/AHN4_cm folder
+
+	parameter<string> AHN_version:= 'AHN_4';
+
+	unit<uint32> blad_alle:
+		StorageName     = "='%AHNDrive%/ahn_units.shp'"
+	,	StorageType     = "gdal.vect"
+	,	StorageReadOnly = "True"
+	,	KeepData        = "True"
+	{
+		attribute<point_rd> geometry (poly);
+		attribute<string>   unit;
+		attribute<bool>     IsIncorrect10dz2 := id(.) == 1403;
+		attribute<bool>     HeeftAHN4data    := isDefined(rlookup(lowercase(unit), lowercase(blad_files/with_data/values)));
+		attribute<bool>     conditie         := HeeftAHN4data && !IsIncorrect10dz2;
+	}
+
+	parameter<string> blad_files:
+		StorageName     = "='%AHNDrive%/' + AHN_version + '_cm/dir_list.txt'"
+	,	StorageType     = "str"
+	,	StorageReadOnly = "True"
+	,	KeepData        = "True"
+	{
+		parameter<uint32> nr_rows := strcount(blad_files, '\n');
+		unit<uint32> all := range(uint32,0,nr_rows)
+		{
+			parameter<string> Header         := ReadLines(blad_files, void, 0);
+			attribute<string> BodyRows (all) := ReadLines(blad_files, all, Header/ReadPos);
+		}
+		unit<uint32> tiff := select_with_org_rel(strcount(all/BodyRows,'.tif') > 0)
+		{
+			attribute<string> pathname          := all/BodyRows[org_rel];
+			attribute<uint32> startpos_filename := strrpos(pathname, '\\') + 1;
+			attribute<string> filename          := substr(pathname, startpos_filename);
+			attribute<string> bladname          := replace(filename, '.tif', '');
+		}
+		unit<uint32> blad_unique := unique(tiff/bladname)
+		{
+			attribute<uint32> count := pcount(rlookup(tiff/bladname, values));
+		}
+		unit<uint32> with_data := select_with_attr_by_cond(blad_unique, blad_unique/count == 2);
+	}
+
+	unit<uint32> blad := select_with_attr_by_cond(blad_alle, blad_alle/conditie) 
+	{
+		// attribute<ipoint>   geometry_ipol (poly) := ipolygon(geometry);
+		attribute<string>   name                 := 'blad_' + unit;
+		attribute<Geografie/blad_grid/domain> blad_grid_rel := centroid(geometry)[Geografie/blad_grid/domain];
+
+		attribute<string> int_filename := expand(., '%AHNDrive%') + '/AHN_4_cm/DTM/' + unit + '.tif';
+		attribute<string> ruw_filename := replace(int_filename, 'DTM', 'DSM');
+
+		/*attribute<jaar>   inwinjaar         := rjoin(id(.), inwinjaren/intersect_AHN/first_rel, inwinjaren/intersect_AHN/inwinjaar_AHN);
+
+
+		container inwinjaren
+		{
+			unit<uint32> intersect_AHN := overlay_polygon(ipolygon(blad/geometry), ipolygon(inwinjaren_AHN/geometry))
+			{
+				attribute<jaar> inwinjaar_AHN := inwinjaren_AHN/inwinjaar_AH4[second_rel];
+			}
+		}*/
+	}
+
+// container inwinjaren_AHN
+// {
+	// unit<uint32> P1_RegioWest2020_v2: StorageName = "D:/SourceData/AHN/AHN4/inwinjaren/P1_RegioWest2020_v2"
+	// , StorageType = "gdal.vect"
+	// , StorageReadOnly = "True";
+
+	// unit<uint32> P2_RegioNoord2020_v2: StorageName = "D:/SourceData/AHN/AHN4/inwinjaren/P2_RegioNoord2020_v2"
+	// , StorageType = "gdal.vect"
+	// , StorageReadOnly = "True";
+
+	// unit<uint32> P2_RegioOost2022_v2: StorageName = "D:/SourceData/AHN/AHN4/inwinjaren/P2_RegioOost2022_v2"
+	// , StorageType = "gdal.vect"
+	// , StorageReadOnly = "True";
+
+	// unit<uint32> P2_RegioZuid2021_v2: StorageName = "D:/SourceData/AHN/AHN4/inwinjaren/P2_RegioZuid2021_v2"
+	// , StorageType = "gdal.vect"
+	// , StorageReadOnly = "True";
+
+	// unit<uint32> P2_RegioZuidWest2020_v2: StorageName = "D:/SourceData/AHN/AHN4/inwinjaren/P2_RegioZuidWest2020_v2"
+	// , StorageType = "gdal.vect"
+	// , StorageReadOnly = "True";
+
+	// unit<uint32> yr2020 := union_unit(P1_RegioWest2020_v2,P2_RegioNoord2020_v2,P2_RegioZuidWest2020_v2)
+	// {
+		// attribute<point_rd> geometry (poly) := union_data(., P1_RegioWest2020_v2/geometry, P2_RegioNoord2020_v2/geometry, P2_RegioZuidWest2020_v2/geometry)[point_rd];
+	// }
+	// unit<uint32> yr2021 := P2_RegioZuid2021_v2
+	// {
+		// attribute<point_rd> geometry (poly) := P2_RegioZuid2021_v2/geometry[point_rd];
+	// }
+	// unit<uint32> yr2022 := P2_RegioOost2022_v2
+	// {
+		// attribute<point_rd> geometry (poly) := P2_RegioOost2022_v2/geometry[point_rd];
+	// }
+	// unit<uint32> totaal := union_unit(yr2020, yr2021, yr2022)
+	// {
+		// attribute<point_rd> geometry (poly) := union_data(., yr2020/geometry, yr2021/geometry, yr2022/geometry);
+		// attribute<uint16>   inwinjaar       := union_data(., const(uint16(2020),yr2020), const(uint16(2021),yr2021), const(uint16(2022),yr2022));
+	// }
+	
+	
+// }
+
+	unit<uint32> inwinjaren_AHN:
+		StorageName = "%AHNDrive%/inwinjaren_AHN3_def.shp"
+	,	StorageType = "gdal.vect"
+	,	StorageReadOnly = "True"
+	{
+		attribute<point_rd>      geometry (poly);
+		attribute<string>        jaar;      
+		attribute<eenheden/jaar> inwinjaar_AH3   := jaar[eenheden/jaar];
+		attribute<eenheden/jaar> inwinjaar_AH4   := switch( //bron:https://www.ahn.nl/ahn-4
+														case(id(.) == V/ZuidHolland, 2020[eenheden/jaar])
+														, case(id(.) == V/Friesland, 2020[eenheden/jaar])
+														, case(id(.) == V/NoordHolland, 2020[eenheden/jaar])
+														, case(id(.) == V/Brabant, 2021[eenheden/jaar])
+														, case(id(.) == V/Flevoland, 2022[eenheden/jaar])
+														, case(id(.) == V/Veluwe, 2022[eenheden/jaar])
+														, case(id(.) == V/Rivieren, 2022[eenheden/jaar])
+														, case(id(.) == V/Limburg, 2021[eenheden/jaar])
+														, case(id(.) == V/Zeeland, 2020[eenheden/jaar])
+														, case(id(.) == V/Gooi, 2020[eenheden/jaar])
+														, case(id(.) == V/Groningen, 2020[eenheden/jaar])
+														, (0/0)[eenheden/jaar]
+													);
+		attribute<string>       label          := switch(
+														case(id(.) == 0, 'ZuidHolland')
+														, case(id(.) == 1, 'Friesland')
+														, case(id(.) == 2, 'NoordHolland')
+														, case(id(.) == 3, 'Brabant')
+														, case(id(.) == 4, 'Flevoland')
+														, case(id(.) == 5, 'Veluwe')
+														, case(id(.) == 6, 'Rivieren')
+														, case(id(.) == 7, 'Limburg')
+														, case(id(.) == 8, 'Zeeland')
+														, case(id(.) == 9, 'Gooi')
+														, case(id(.) == 10, 'Groningen')
+														, ''
+													);
+													
+		container V := for_each_nedv(lowercase(label), 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	container BAG_perspectieven
+	{
+		unit<uint32> blad := unique(overlay_ahn_with_bag_data/second_rel), label = "unieke AHN bladen met BAG data"
+		{
+			attribute<string> name := brondata/AHN4/blad/name[values];
+		}
+
+		container per_blad := for_each_ne(
+			 blad/name
+			,'Schemas/ahn_set_to_BAG_perspectieven/bepaal_BAG_perspectief_griddomeinen_en_lees_data_per_blad(brondata/AHN4/blad,' + string(blad/values) + ')'
+		);
+	}
+	
+}

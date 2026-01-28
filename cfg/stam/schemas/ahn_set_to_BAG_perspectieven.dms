@@ -1,0 +1,96 @@
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                     //
+//                                                                                                     //
+//        Configuratie voor het genereren van vastgoed informatie voor EDM                             //
+//                                                                                                     //
+//                              Object Vision 2023                                                     //
+//                                                                                                     //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                     //
+// Configuratiebestand met schem om AHN 4 in te lezen (met verschillende BAG perspectieven)            //
+//                                                                                                     //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Container ahn_set_to_BAG_perspectieven
+{
+	template bepaal_BAG_perspectief_griddomeinen_en_lees_data_per_blad
+	{
+		// begin case parameters
+		unit<uint32> blad_AHN;
+		parameter<blad_AHN> blad_AHN_rel;
+		//
+
+		parameter<string> unit := blad_AHN/unit[blad_AHN_rel];
+
+		unit<uint32> readDomainsBlad := select_with_org_rel(brondata/overlay_ahn_with_bag_data/second_rel  == blad_AHN_rel)
+		{
+			attribute<Brondata/bag_blad> pand_plus_blad_rel := brondata/overlay_ahn_with_bag_data/first_rel[org_rel];
+
+			attribute<string>            unit               := Brondata/bag_blad/unit[pand_plus_blad_rel];
+			attribute<string>            name               := 'blad_' + unit;
+
+			attribute<point_rd>          lowerbound         := brondata/overlay_ahn_with_bag_data/lower_bound[org_rel];
+			attribute<point_rd>          upperbound         := brondata/overlay_ahn_with_bag_data/upper_bound[org_rel];
+
+			attribute<m>                 minX               := PointCol(lowerbound)[m];
+			attribute<m>                 maxX               := PointCol(upperbound)[m];
+			attribute<m>                 minY               := PointRow(lowerbound)[m];
+			attribute<m>                 maxY               := PointRow(upperbound)[m];
+		}
+
+		container perReadDomainSrc :=
+			for_each_ne(
+				 readDomainsBlad/name
+				,replace('bepaal_BAG_perspectief_griddomein(readDomainsBlad/minX[@R], readDomainsBlad/maxX[@R], readDomainsBlad/minY[@R], readDomainsBlad/maxY[@R])', '@R', string(id(readDomainsBlad))+'[readDomainsBlad]')
+			);
+
+		container perReadDomain := for_each_nex(readDomainsBlad/name, 'perReadDomainSrc/' + readDomainsBlad/name + '/grid/domain', ipoint); // constructie om het domein als diret subitem te krijgen 
+
+		parameter<string> int_filename := blad_AHN/int_filename[blad_AHN_rel];
+		parameter<string> ruw_filename := blad_AHN/ruw_filename[blad_AHN_rel];
+
+		container DTM := lees_data_per_blad(int_filename, readDomainsBlad, perReadDomain);
+		container DSM := lees_data_per_blad(ruw_filename, readDomainsBlad, perReadDomain);
+	}
+
+	template bepaal_BAG_perspectief_griddomein
+	{
+		parameter<m> xmin;
+		parameter<m> xmax;
+		parameter<m> ymin;
+		parameter<m> ymax;
+
+		container blad
+		{
+			parameter<m> x_min := xmin;
+			parameter<m> x_max := xmax;
+			parameter<m> y_min := ymin;
+			parameter<m> y_max := ymax;
+		}
+		container grid := Schemas/define_grid(ahn_tiles_gridset, 0.5[m], 0.5[m], blad);
+	}
+
+	template lees_data_per_blad
+	{
+		// begin case parameters
+		parameter<string> filename;
+		unit<uint32> readdomains;
+		container perReadDomain;
+		// end case parameters
+
+		unit<ipoint> grid
+		:	StorageName     = "=filename"
+		,	StorageType     = "gdal.grid"
+		,	DialogData      = "point_rd"
+		,	StorageReadOnly = "True"
+	{
+			container files :=
+				for_each_ndnv(
+					  readdomains/name
+					, perReadDomain
+					, readdomains/name
+					, cm_uint16
+					);
+		}
+	}
+}
