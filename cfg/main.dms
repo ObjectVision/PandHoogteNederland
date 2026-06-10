@@ -15,21 +15,25 @@ container PHN
 {
 	container Parameters
 	{
-		parameter<string> BAG_Date := '20260101';
+		parameter<string> BAG_FileDate   := '20260108';
+		parameter<string> BAG_RecentYear := left(BAG_FileDate, 4);
+		parameter<string> BAG_Date       := '20260101';
 	}
 	
-	#include <eenheden.dms>
-	#include <klassificaties.dms>
-	#include <geografie.dms>
-	#include <brondata.dms>
-	#include <schemas.dms>
-	#include <resultaten.dms>
+	#include <units.dms>
+	#include <classifications.dms>
+	#include <geography.dms>
+	#include <sourcedata.dms>
+	#include <results.dms>
+	#include <templates.dms>
+
 	container ConfigSettings
 	{
 		container Overridable
 		{
-			parameter<string> AHNDrive    := 'D:/SourceData/AHN';
-			parameter<string> BAG_DataDir := 'E:/SourceData/BAG';
+			parameter<string> AHNDrive    := 'E:/SourceData/AHN';
+			parameter<string> BAG_DataDir := 'E:/SourceData/RuimteScanner/SD/RSOpen/Vastgoed';
+			parameter<string> RSo_DataDir := 'E:/SourceData/RuimteScanner/SD/RSOpen';
 		}
 	}
 }

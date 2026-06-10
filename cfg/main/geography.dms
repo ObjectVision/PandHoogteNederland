@@ -1,0 +1,59 @@
+container Geography: Using = "Units;Classifications"
+{
+	unit<dpoint>  rdc_meter : SpatialReference = "EPSG:28992", DialogData = "ngr_layer"; // wms achtergrondlaag voor kaarten met rd coordinaten
+
+	unit<ipoint>  rdc_mm := // for polygon functions
+		gridset(
+			  rdc_meter
+			, point_xy(0.001d, 0.001d, rdc_meter)
+			, point_xy(0d    , 0d    , rdc_meter)
+			, ipoint
+		);
+
+	unit<ipoint> ahn_tiles_gridset :=
+		gridset(
+			 rdc_meter
+			,point_xy(0.5d, -0.5d, rdc_meter)
+			,point_xy(0d, 0d, rdc_meter)
+			,ipoint
+		);
+
+	unit<ipoint> ahn_blok_gridset  :=
+		gridset(
+			 rdc_meter
+			,point_xy(10000m, -10000m, rdc_meter)
+			,point_xy(0d, 0d, rdc_meter)
+			,ipoint
+		);
+
+	container Tiles_bbox
+	{
+		attribute<rdc_meter> lowerbound (SourceData/AHN/Tiles) := lower_bound(SourceData/AHN/Tiles/geometry);
+		attribute<rdc_meter> upperbound (SourceData/AHN/Tiles) := upper_bound(SourceData/AHN/Tiles/geometry);
+ 
+		attribute<m>        x_min_att  (SourceData/AHN/Tiles) := PointCol(lowerbound)[m];
+		attribute<m>        x_max_att  (SourceData/AHN/Tiles) := PointCol(upperbound)[m];
+		attribute<m>        y_min_att  (SourceData/AHN/Tiles) := PointRow(lowerbound)[m];
+		attribute<m>        y_max_att  (SourceData/AHN/Tiles) := PointRow(upperbound)[m];
+ 
+		parameter<m>        x_min      := min(x_min_att);
+		parameter<m>        x_max      := max(x_max_att);
+		parameter<m>        y_min      := min(y_min_att);
+		parameter<m>        y_max      := max(y_max_att);
+	}
+ 
+	container TileGrid := Templates/Define_grid_T(ahn_blok_gridset, 10000[m], 10000[m], Tiles_bbox)
+	{
+		attribute<string> unit (domain) := first(SourceData/AHN/Tiles/name, SourceData/AHN/Tiles/TileGrid_rel);
+		attribute<string> name (domain) := first(SourceData/AHN/Tiles/name, SourceData/AHN/Tiles/TileGrid_rel);
+	}		
+
+	#include<ngr_layer.dms>
+
+	// voor buffer points bepaling
+	unit<spoint> kernel_buffer := range(spoint, point_xy(-2s, -2s), point_xy(3s,3s))
+	{
+		attribute<uint32>  dist     := dist2(point_xy(0s, 0s, .), uint32);
+		attribute<float32> distMatr := dist <= 5 ? 1f : 0f;
+	}
+}

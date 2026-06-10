@@ -1,0 +1,24 @@
+container Classifications : Using = "Units"
+{
+	unit<uint8> pandtype_geo: nrofrows = 6
+	{
+		attribute<string> label: ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand'], DialogType = "labelText";
+		attribute<string> name := replace(label, ' ','_');
+		container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> pandtype_geo_plus: nrofrows = 8
+	{
+		attribute<string> label: ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand','ligplaats','standplaats'], DialogType = "labelText";
+		attribute<string> name := replace(label, ' ','_');
+		container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<UInt8> pand_status : NrOfRows = 10
+	{
+		attribute<String>    Label      : ['Bouw gestart','Bouwvergunning verleend','Niet gerealiseerd pand','Pand buiten gebruik','Pand gesloopt','Pand in gebruik','Pand in gebruik (niet ingemeten)','Sloopvergunning verleend','Pand ten onrechte opgevoerd','Verbouwing pand'], DialogType = "LabelText";
+		attribute<String>    name       := replace(Label, ' ', '_', '-', '_', '(', '', ')', '');
+		attribute<Bool>      IsVoorraad      : [FALSE,  FALSE, FALSE, TRUE,  FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE];
+		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+	}
+}

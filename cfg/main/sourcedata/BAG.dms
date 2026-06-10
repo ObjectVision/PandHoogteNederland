@@ -1,0 +1,112 @@
+container BAG
+{
+	container VolledigeBAG
+	: Descr = "Volledige BAG dataset, oftewel met alle historische statussen."
+	{ 
+		parameter<String>  Snapshot_Date_Input      := Parameters/BAG_FileDate;
+		parameter<String>  BAG_dir           := '%RSo_DataDir%/Vastgoed/VolledigeTabel_' + Snapshot_Date_Input;
+		parameter<Int32>   MaxDatum                 := 20500101i;
+		parameter<String>  Bouwjaar_truncation_Expr := 'Bouwjaar <= 1005w || Bouwjaar > @YYYY@[yr] ? null_w : Bouwjaar < 1500w ? 1500w : Bouwjaar';
+		parameter<String>  max_Bouwjaar             := string(Parameters/BAG_RecentYear);
+		
+		container panden
+		{
+			unit<UInt32> Import
+			:	StorageName = "= BAG_dir + '/pand.mmd'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<rdc_mm>                       geometry_mm            (poly);
+				attribute<rdc_meter>                    geometry               (poly) := geometry_mm[rdc_meter], DisableStorage = "TRUE";
+				attribute<String>                       identificatie;
+				attribute<uint16>                       Bouwjaar;
+
+				container meta := meta_src_template(., pand_status);
+			}
+			
+			unit<UInt32> src := Import
+			{
+				attribute<rdc_meter>                    geometry_org (poly)          := Import/geometry;
+				attribute<uint64>                       pand_bag_nr                  := uint64(identificatie);
+				attribute<pand_status>                  status_rel                   := Import/meta/status_rel;
+				attribute<Int32>                        Begindatum                   := Impl/Begindatum0 < 19600101i ? Impl/TIJDSTIPREGISTRATIE : Impl/Begindatum0;
+				attribute<Int32>                        Einddatum                    := Impl/Einddatum0 < 19600101i ? Impl/EINDREGISTRATIE : Impl/Einddatum0;
+				attribute<yr>                           Bouwjaar                     := Import/Bouwjaar[yr];
+				attribute<yr>                           Bouwjaar_trunc               := =replace(Bouwjaar_truncation_Expr, '@YYYY@', max_Bouwjaar);
+				attribute<m2>                           Footprint                    := area(geometry, m2);
+				attribute<Bool>                         IsVoorraad                   := pand_status/isVoorraad[status_rel];
+				attribute<rdc_meter>                    geometry (poly)              := recollect_by_cond(Impl/HasNegativearea, Impl/select_reversed_winding_order/geometry_reversed, geometry_org);
+				
+				// attribute<bool> IsStudyArea := IsNoord_Holland; // const(TRUE, .);
+				attribute<bool> IsStudyArea := const(TRUE, .);
+
+				unit<UInt32> Impl := .
+				{
+					//script to flip negative winding orders
+					attribute<Bool>                     HasNegativearea              := area(geometry_org, m2) < 0[m2];
+					unit<UInt32> select_reversed_winding_order := select_with_org_rel(HasNegativearea)
+					{
+						attribute<rdc_meter>                geometry (poly)          := src/geometry_org[org_rel];
+						attribute<Int32>                    Begindatum0              := Impl/Begindatum0[org_rel];
+
+						unit<UInt32> seq_points := sequence2points(geometry)
+						{
+							attribute<rdc_meter> points_reversed       := reverse(point);
+							attribute<UInt32>    Sequence_rel_Reversed := reverse(Sequence_rel);
+						}
+						
+						attribute<m2>        area_reversed            := area(geometry_reversed, m2);
+						attribute<rdc_meter> geometry_reversed (poly) := points2sequence(seq_points/points_reversed, seq_points/Sequence_rel_Reversed);
+					}
+				
+					attribute<Int32>                        TIJDSTIPREGISTRATIE          := int32(replace(substr(Import/meta/TIJDSTIPREGISTRATIE,0,10),'-',''));
+					attribute<Int32>                        EINDREGISTRATIE              := int32(replace(substr(Import/meta/EINDREGISTRATIE,0,10),'-',''));
+					attribute<Int32>                        Begindatum0                  := Import/meta/Begindatum == 0i ? MaxDatum : Import/meta/Begindatum;
+					attribute<Int32>                        Einddatum0                   := Import/meta/Einddatum == 0i ? MaxDatum : Import/meta/Einddatum;
+					attribute<rdc_meter>                    NW                           := lower_bound(geometry);
+					attribute<rdc_meter>                    SE                           := upper_bound(geometry);
+					attribute<Float64>                      X_ext                        := sub_or_null(PointCol(SE),PointCol(NW));
+					attribute<Float64>                      Y_ext                        := sub_or_null(PointRow(SE),PointRow(NW));
+					
+					attribute<Float64>                      lower_x := PointCol(NW);
+					attribute<Float64>                      upper_x := PointCol(SE);
+					attribute<Float64>                      lower_y := PointRow(NW);
+					attribute<Float64>                      upper_y := PointRow(SE);
+					
+					attribute<Bool>                         pand_selection_condition     := ='X_ext < 1000d && Y_ext < 1000d' //panden met een grotere x/y range dan 1km eruit
+																							'&& lower_x < 300000d && lower_x > 0d'
+																							'&& upper_x < 300000d && upper_x > 0d'
+																							'&& lower_y < 620000d && lower_y > 300000d'
+																							'&& upper_y < 620000d && upper_y > 300000d' //; //binnen NL
+																							'&& IsStudyArea';
+				}
+			}  
+				
+			unit<UInt32> pand := select_with_attr_by_org_rel(src, src/Impl/pand_selection_condition);
+		}
+
+		template meta_src_template 
+		: Descr = "Template voor het inlezen van de generieke BAG attributen"
+		{
+			unit<UInt32> domain;
+			unit<UInt8>  statusType;
+
+			attribute<String>     Status                 (domain);
+			attribute<statusType> status_rel             (domain) := rlookup(LowerCase(Status), LowerCase(statusType/Label));
+
+			attribute<Int32>      Begindatum             (domain);
+			attribute<Int32>      Einddatum              (domain);
+
+			attribute<String>     TIJDSTIPREGISTRATIE    (domain);
+			attribute<String>     EINDREGISTRATIE        (domain);
+		}
+	}
+
+	attribute<Bool> pand_selection_condition (VolledigeBAG/panden/pand) := VolledigeBAG/panden/pand/IsVoorraad 
+														&& VolledigeBAG/panden/pand/Begindatum < int32(Parameters/BAG_Date) 
+														&& VolledigeBAG/panden/pand/Einddatum >= int32(Parameters/BAG_Date);
+	unit<UInt32> pand := select_with_attr_by_cond(VolledigeBAG/panden/pand, pand_selection_condition)
+	, Descr = "set met panden op 1 januari van elk jaar die voorraad zijn volgens de CBS definitie."
+	{
+		attribute<AHN/Tiles> Tile_rel := point_in_polygon(centroid_or_mid(geometry), AHN/Tiles/geometry);
+	}
+}

@@ -1,0 +1,108 @@
+container Templates : Using = "Units;Geography"
+{
+	template define_grid_T
+	{
+		unit<ipoint> gridset;
+		parameter<m> gridsizeX;
+		parameter<m> gridsizeY;
+		container bbox;
+		// end case parameters
+
+		parameter<int32> nr_cols := int32((bbox/x_max - bbox/x_min) / gridsizeX);
+		parameter<int32> nr_rows := int32((bbox/y_max - bbox/y_min) / gridsizeY);
+
+		 unit<ipoint> domain:=
+			range(
+					gridset
+				   ,point_xy(bbox/x_min, bbox/y_max, rdc_meter)[gridset]
+				   ,point_xy(bbox/x_min, bbox/y_max, rdc_meter)[gridset] 
+				   + point_xy(nr_cols, nr_rows, gridset)
+			  )
+		,	DialogData = "rdc_meter"
+		{
+			attribute<uint8> test:= const(1b,.);
+		}
+	}
+	
+	template bepaal_hoogtes_en_daken_T
+	{
+		// begin case parameters
+		unit<uint32> pand_subset;
+		unit<ipoint> GridDomain;
+		attribute<cm_int16> hoogte_ruw_offset (GridDomain); //dsm   /sourcedata/AHN/DSM/cell_1_6/heights/height
+		attribute<cm_int16> hoogte_int_offset (GridDomain); //dtm
+		// end case parameters
+
+		attribute<pand_subset> pand_subset_rel (GridDomain) := poly2grid(pand_subset/geometry, GridDomain);
+		
+		container hoogte
+		{
+			container impl
+			{
+				container buffer_points
+				{
+					container max := bepaal_buffer_points_T(pand_subset, GridDomain, true);
+					container min := bepaal_buffer_points_T(pand_subset, GridDomain, false);
+
+					unit<uint32> all := union_unit(max/buffer_points, min/buffer_points)
+					{
+						attribute<rdc_meter> geometry      := union_data(., max/buffer_points/geometry        , min/buffer_points/geometry);
+						attribute<pand_subset> pand_subset_rel := union_data(., max/buffer_points/pand_subset_rel, min/buffer_points/pand_subset_rel);
+						attribute<cm_int16>  hoogte_offset := union_data(., max/buffer_points/hoogte_offset, min/buffer_points/hoogte_offset);
+						attribute<string>    key           := string(pointCol(geometry)) + '_' + string(pointRow(geometry)) + '_' + string(pand_subset_rel);
+					}
+
+					unit<uint32> unique := unique(all/key)
+					{
+						attribute<all>       all_rel       := rlookup(values, all/key);
+						attribute<rdc_meter> geometry      := all/geometry[all_rel];
+						attribute<pand_subset> pand_subset_rel := all/pand_subset_rel[all_rel];
+						attribute<cm_int16> hoogte_offset := all/hoogte_offset[all_rel];
+					}
+				}
+
+				attribute<cm_int16> pand_hoogte_offset     (pand_subset) := rth_element(hoogte_ruw_offset, 0.7f, pand_subset_rel);
+				attribute<cm_int16> pand_hoogte_offset_nok (pand_subset) := rth_element(hoogte_ruw_offset, 0.9f, pand_subset_rel);
+
+				attribute<cm_int16> buffer_hoogte_offset   (pand_subset) := rth_element(buffer_points/unique/hoogte_offset, 0.15f, buffer_points/unique/pand_subset_rel);
+			}
+
+			attribute<cm_int16> pand (pand_subset) :=
+				(isDefined(impl/pand_hoogte_offset) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset > impl/buffer_hoogte_offset))
+					? sub_or_null(impl/pand_hoogte_offset, impl/buffer_hoogte_offset)
+					: (0 / 0)[cm_int16];
+			attribute<cm_int16> nok  (pand_subset) :=
+				(isDefined(impl/pand_hoogte_offset_nok) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset_nok > impl/buffer_hoogte_offset))
+					? sub_or_null(impl/pand_hoogte_offset_nok, impl/buffer_hoogte_offset)
+					: (0 / 0)[cm_int16];
+		}
+	}
+
+	template bepaal_buffer_points_T
+	{
+		// begin template parameters
+		unit<uint32>    pand_subset;
+		unit<ipoint>    GridDomain;
+		parameter<bool> isMax;
+		// end template parameters
+
+		// grid buffers gebruikt voor bepaling maaiveld hoogte
+		attribute<float32>   proximity_arg   (GridDomain) := isMax ? (float32(pand_subset_rel) + 1f) : float32(#pand_subset) - (float32(pand_subset_rel)); // + 1 is nodig omdat anders de proximity naar pand 0 hetzelfde zou zijn als het buitengebied
+		attribute<float32>   proximity_res   (GridDomain) := proximity(proximity_arg, Geography/kernel_buffer/distMatr);
+		attribute<pand_subset> pand_met_buffer (GridDomain) := isMax 
+			? (proximity_res - 1f)[pand_subset] 
+			: (proximity_res = 0f 
+				? (0 / 0)[pand_subset] 
+				: (float32(#pand_subset) - proximity_res)[pand_subset]);
+
+		attribute<pand_subset> buffer (GridDomain) := isDefined(pand_subset_rel) ? (0 / 0)[pand_subset] : pand_met_buffer;
+
+		unit<uint64> buffer_points := select_with_org_rel(isDefined(buffer) && isDefined(hoogte_int_offset))
+		{
+			attribute<rdc_meter> geometry      := org_rel[rdc_meter];
+			attribute<pand_subset> pand_subset_rel := buffer[org_rel];
+			attribute<cm_int16>  hoogte_offset := hoogte_int_offset[org_rel];
+		}
+	}
+	
+}

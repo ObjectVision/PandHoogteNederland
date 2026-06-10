@@ -1,0 +1,56 @@
+container AHN
+{
+	unit<uint32> Tiles
+	:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6_combination.gpkg'"
+	,	StorageType     = "gdal.vect"
+	,	StorageReadOnly = "True"
+	,	KeepData        = "True"
+	, 	DialogData      = "rdc_meter"
+	{
+		attribute<string> name;
+		attribute<Geography/TileGrid/domain> TileGrid_rel := centroid(geometry)[Geography/TileGrid/domain];
+	}
+  
+	// container DTM := 
+	// 	for_each_ne(
+	// 		Tiles/name
+	// 		, 'Read_Tiles_T(''DTM'', '+quote(Tiles/name)+')'
+	// 	);
+	// container DSM := 
+	// 	for_each_ne(
+	// 		Tiles/name
+	// 		, 'Read_Tiles_T(''DSM'', '+quote(Tiles/name)+')'
+	// 	);
+
+	// template Read_Tiles_T
+	// {
+	// 	parameter<string> type;
+	// 	parameter<string> name;
+	// 	// end template params
+ 
+	// 	parameter<string> height_fn     := '%AHNDrive%/AHN4_AHN5_AHN6/' + type + '/' + name + '_05m.tif';
+	// 	parameter<string> provenance_fn := '%AHNDrive%/AHN4_AHN5_AHN6/' + type + '/' + name + '_src.tif';
+
+	// 	unit<ipoint> heights
+	// 	:	StorageName     = "=height_fn"
+	// 	,	StorageType     = "gdal.grid"
+	// 	,	DialogData      = "rdc_meter"
+	// 	,	StorageReadOnly = "True"
+	// 	{
+	// 		attribute<cm_uint16>      GridData;
+	// 		attribute<cm_int16>       height         := GridData[cm_int16];
+	// 		attribute<provenance_src> provenance_rel := id(.)[provenance_src];
+	// 		attribute<uint8>          provenance     := provenance_src/GridData[provenance_rel];
+	// 	}
+ 
+	// 	unit<ipoint> provenance_src //uit welke AHN versie komt de hoogte? ahn 4/5/6 
+	// 	:	StorageName     = "=provenance_fn"
+	// 	,	StorageType     = "gdal.grid"
+	// 	,	DialogData      = "rdc_meter"
+	// 	,	StorageReadOnly = "True"
+	// 	{
+	// 		attribute<uint8> GridData;
+	// 	}
+	// }
+
+}

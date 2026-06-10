@@ -1,0 +1,134 @@
+container Results : Using = "Units;classifications;sourcedata;Geography;sourcedata/ahn"
+{ 
+	// unit<uint32> Tiles_met_panden := select_with_attr_by_cond(Tiles, id(Tiles) < 90 && count(sourcedata/BAG/pand/Tile_rel, sourcedata/BAG/pand/Tile_rel) > 0);
+	unit<uint32> Tiles_met_panden := select_with_attr_by_cond(Tiles, count(sourcedata/BAG/pand/Tile_rel, sourcedata/BAG/pand/Tile_rel) > 0);
+
+	container Koppel_AHN_aan_Pand_perTile :=
+		for_each_ne(
+			Tiles_met_panden/name
+			, 'Koppel_AHN_aan_Pand_perTile_T('+quote(Tiles_met_panden/name)+')'
+		)
+	{
+		container generates
+		{
+			parameter<string> Generate := ='add('+AsList('Results/Koppel_AHN_aan_Pand_perTile/'+Tiles_met_panden/name+'/Results/Generate', ',')+')';
+		}
+	}
+
+	template Koppel_AHN_aan_Pand_perTile_T
+	{
+		parameter<string> Tile_name;
+		//
+		parameter<Tiles>   Tile_rel := rlookup(Tile_name, Tiles/name);
+
+		unit<uint32> pand_subset := select_with_attr_by_cond(sourcedata/BAG/pand, sourcedata/BAG/pand/Tile_rel == Tile_rel);
+		
+		container Start0
+		{
+			parameter<string> Tile_name := ../Tile_name;			
+		}
+		container Start := PhaseContainer(Start0, 'Start tile '+Tile_name+' ('+string(rlookup(Tile_name, Tiles_met_panden/name)+1)+' out of '+string(#Tiles_met_panden)+')');
+		
+		unit<uint32> AreaOfInterest : nrofrows = 1 //fka vlak
+		{
+			parameter<m> buffer:= 2[m];
+			parameter<m> x_min := min(PointCol(lower_bound(pand_subset/geometry))) - buffer;
+			parameter<m> x_max := max(PointCol(upper_bound(pand_subset/geometry))) + buffer;
+			parameter<m> y_min := min(PointRow(lower_bound(pand_subset/geometry))) - buffer;
+			parameter<m> y_max := max(PointRow(upper_bound(pand_subset/geometry))) + buffer;
+
+			attribute<rdc_meter> geometry      (poly) := points2Sequence(pointset/point, const(0[.], pointset), id(pointset));
+	
+			unit<uint32> pointset := union_unit(., ., ., ., .)
+			{
+				attribute<rdc_meter> point := union_data(.
+					, point_xy(x_min, y_max, rdc_meter)
+					, point_xy(x_max, y_max, rdc_meter)
+					, point_xy(x_max, y_min, rdc_meter)
+					, point_xy(x_min, y_min, rdc_meter)
+					, point_xy(x_min, y_max, rdc_meter)
+				);
+			}
+
+			parameter<int32> nr_cols := int32((x_max - x_min) / 0.5[m]);
+			parameter<int32> nr_rows := int32((y_max - y_min) / 0.5[m]);
+
+			unit<ipoint> domain :=
+				range(
+					Geography/ahn_tiles_gridset
+					, point_xy(x_min, y_max, rdc_meter)[Geography/ahn_tiles_gridset]
+					, point_xy(x_min, y_max, rdc_meter)[Geography/ahn_tiles_gridset]
+					  + point_xy(nr_cols, nr_rows, Geography/ahn_tiles_gridset)
+				), DialogData = "rdc_meter"
+			{
+				attribute<uint8> test := const(1b,.);
+			}
+		}
+
+		container Read_AHN_Data
+		{
+			unit<ipoint> DTM
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DTM/'+Start/Tile_name+'_05m.tif'"
+			,	StorageType     = "gdal.grid"
+			,	DialogData      = "rdc_meter"
+			,	StorageReadOnly = "True"
+			,  	ExplicitSuppliers = "Start/Tile_name"
+			{
+				attribute<cm_uint16>      GridData;
+				attribute<cm_int16>       height         := GridData[cm_int16];
+			}
+			unit<ipoint> DSM
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Start/Tile_name+'_05m.tif'"
+			,	StorageType     = "gdal.grid"
+			,	DialogData      = "rdc_meter"
+			,	StorageReadOnly = "True"
+			,  	ExplicitSuppliers = "Start/Tile_name"
+			{
+				attribute<cm_uint16>      GridData;
+				attribute<cm_int16>       height         := GridData[cm_int16];
+			}
+		}
+
+		attribute<cm_int16> dsm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int16, Read_AHN_Data/DSM/height);
+		attribute<cm_int16> dtm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int16, Read_AHN_Data/DTM/height);
+
+		container Bepaal_hoogtes_en_daken := Templates/bepaal_hoogtes_en_daken_T(
+			pand_subset
+			, AreaOfInterest/domain
+			, dsm_local
+			, dtm_local
+		);
+
+		unit<uint32> WriteResults
+		: StorageName = "='%LocalDataProjDir%/Temp/PHN_'+/Parameters/BAG_Date+'_'+Tile_name+'.mmd'"
+		,  	ExplicitSuppliers = "Start/Tile_name"
+		{
+			attribute<rdc_meter> geometry          (poly, pand_subset) := pand_subset/geometry;
+			attribute<uint64>    pand_bag_nr             (pand_subset) := pand_subset/pand_bag_nr;
+			attribute<int16>     hoogte                  (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/pand;
+			attribute<int16>     hoogte_nok              (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/nok;
+			attribute<int16>     hoogte_maaiveld_offset  (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/impl/buffer_hoogte_offset;
+		}
+
+		container GetResults 
+		{
+			parameter<string> Generate := 'Ready', explicitsuppliers = "WriteResults"; 
+		}
+
+		container Results := PhaseContainer(GetResults, 'Results for '+Start/Tile_name+' ('+string(rlookup(Tile_name, Tiles_met_panden/name)+1)+' out of '+string(#Tiles_met_panden)+') are finished calculating');
+	
+		unit<uint32> ReadResults
+		: StorageName = "='%LocalDataProjDir%/Temp/PHN_'+/Parameters/BAG_Date+'_'+Tile_name+'.mmd'"
+		, StorageReadOnly = "TRUE";
+	}
+
+	unit<uint32> Unioned_Result := ='union_unit(' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/pand_subset', ',') + ')'
+	, StorageName = "='%LocalDataProjDir%/PHN_'+/Parameters/BAG_Date+'.mmd'"
+	{
+		attribute<rdc_meter> geometry         (poly) := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/geometry', ',')+ ')';
+		attribute<uint64>    pand_bag_nr             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/pand_bag_nr', ',')+ ')';
+		attribute<int16>     hoogte                  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte', ',')+ ')';
+		attribute<int16>     hoogte_nok              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_nok', ',')+ ')';
+		attribute<int16>     hoogte_maaiveld_offset  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_maaiveld_offset', ',') + ')';
+	}
+}
