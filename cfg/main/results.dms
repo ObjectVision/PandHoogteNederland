@@ -1,5 +1,6 @@
 container Results : Using = "Units;classifications;sourcedata;Geography;sourcedata/ahn"
 { 
+	// unit<uint32> Tiles_met_panden := select_with_attr_by_cond(Tiles, id(Tiles) < 132 ||  id(Tiles) >= 130  && count(sourcedata/BAG/pand/Tile_rel, sourcedata/BAG/pand/Tile_rel) > 0);
 	// unit<uint32> Tiles_met_panden := select_with_attr_by_cond(Tiles, id(Tiles) < 90 && count(sourcedata/BAG/pand/Tile_rel, sourcedata/BAG/pand/Tile_rel) > 0);
 	unit<uint32> Tiles_met_panden := select_with_attr_by_cond(Tiles, count(sourcedata/BAG/pand/Tile_rel, sourcedata/BAG/pand/Tile_rel) > 0);
 
@@ -130,5 +131,11 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 		attribute<int16>     hoogte                  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte', ',')+ ')';
 		attribute<int16>     hoogte_nok              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_nok', ',')+ ')';
 		attribute<int16>     hoogte_maaiveld_offset  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_maaiveld_offset', ',') + ')';
+	}
+
+	unit<uint32> Read_Result
+	: StorageName = "='%LocalDataProjDir%/PHN_'+/Parameters/BAG_Date+'.mmd'"
+	, StorageReadOnly = "true"
+	{
 	}
 }

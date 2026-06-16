@@ -46,23 +46,23 @@ container Templates : Using = "Units;Geography"
 
 					unit<uint32> all := union_unit(max/buffer_points, min/buffer_points)
 					{
-						attribute<rdc_meter> geometry      := union_data(., max/buffer_points/geometry        , min/buffer_points/geometry);
+						attribute<rdc_meter>   geometry        := union_data(., max/buffer_points/geometry        , min/buffer_points/geometry);
 						attribute<pand_subset> pand_subset_rel := union_data(., max/buffer_points/pand_subset_rel, min/buffer_points/pand_subset_rel);
-						attribute<cm_int16>  hoogte_offset := union_data(., max/buffer_points/hoogte_offset, min/buffer_points/hoogte_offset);
-						attribute<string>    key           := string(pointCol(geometry)) + '_' + string(pointRow(geometry)) + '_' + string(pand_subset_rel);
+						attribute<cm_int16>    hoogte_offset   := union_data(., max/buffer_points/hoogte_offset, min/buffer_points/hoogte_offset);
+						attribute<string>      key             := string(pointCol(geometry)) + '_' + string(pointRow(geometry)) + '_' + string(pand_subset_rel);
 					}
 
 					unit<uint32> unique := unique(all/key)
 					{
-						attribute<all>       all_rel       := rlookup(values, all/key);
-						attribute<rdc_meter> geometry      := all/geometry[all_rel];
+						attribute<all>         all_rel         := rlookup(values, all/key);
+						attribute<rdc_meter>   geometry        := all/geometry[all_rel];
 						attribute<pand_subset> pand_subset_rel := all/pand_subset_rel[all_rel];
-						attribute<cm_int16> hoogte_offset := all/hoogte_offset[all_rel];
+						attribute<cm_int16>    hoogte_offset   := all/hoogte_offset[all_rel];
 					}
 				}
-
-				attribute<cm_int16> pand_hoogte_offset     (pand_subset) := rth_element(hoogte_ruw_offset, 0.7f, pand_subset_rel);
-				attribute<cm_int16> pand_hoogte_offset_nok (pand_subset) := rth_element(hoogte_ruw_offset, 0.9f, pand_subset_rel);
+			 	attribute<cm_int16> pand_hoogte_offset     (pand_subset) := mean(hoogte_ruw_offset, pand_subset_rel); //20260616 EO geeft aan dat dit mogelijk beter werkt dan de rth-element, nog volledig gevalideerd.
+				// attribute<cm_int16> pand_hoogte_offset     (pand_subset) := rth_element(hoogte_ruw_offset, 0.6f, pand_subset_rel); // 0.6 voor ahn5/6 (Erik), origineel 0.7
+				attribute<cm_int16> pand_hoogte_offset_nok (pand_subset) := rth_element(hoogte_ruw_offset, 0.8f, pand_subset_rel); // 0.8 voor ahn5/6 (Erik), origineel 0.9
 
 				attribute<cm_int16> buffer_hoogte_offset   (pand_subset) := rth_element(buffer_points/unique/hoogte_offset, 0.15f, buffer_points/unique/pand_subset_rel);
 			}
@@ -87,8 +87,8 @@ container Templates : Using = "Units;Geography"
 		// end template parameters
 
 		// grid buffers gebruikt voor bepaling maaiveld hoogte
-		attribute<float32>   proximity_arg   (GridDomain) := isMax ? (float32(pand_subset_rel) + 1f) : float32(#pand_subset) - (float32(pand_subset_rel)); // + 1 is nodig omdat anders de proximity naar pand 0 hetzelfde zou zijn als het buitengebied
-		attribute<float32>   proximity_res   (GridDomain) := proximity(proximity_arg, Geography/kernel_buffer/distMatr);
+		attribute<float32>     proximity_arg   (GridDomain) := isMax ? (float32(pand_subset_rel) + 1f) : float32(#pand_subset) - (float32(pand_subset_rel)); // + 1 is nodig omdat anders de proximity naar pand 0 hetzelfde zou zijn als het buitengebied
+		attribute<float32>     proximity_res   (GridDomain) := proximity(proximity_arg, Geography/kernel_buffer/distMatr);
 		attribute<pand_subset> pand_met_buffer (GridDomain) := isMax 
 			? (proximity_res - 1f)[pand_subset] 
 			: (proximity_res = 0f 
@@ -97,12 +97,11 @@ container Templates : Using = "Units;Geography"
 
 		attribute<pand_subset> buffer (GridDomain) := isDefined(pand_subset_rel) ? (0 / 0)[pand_subset] : pand_met_buffer;
 
-		unit<uint64> buffer_points := select_with_org_rel(isDefined(buffer) && isDefined(hoogte_int_offset))
+		unit<uint64> buffer_points := select_with_org_rel(isDefined(buffer) && isDefined(hoogte_int_offset) && hoogte_int_offset > 0[cm_int16])
 		{
 			attribute<rdc_meter> geometry      := org_rel[rdc_meter];
 			attribute<pand_subset> pand_subset_rel := buffer[org_rel];
 			attribute<cm_int16>  hoogte_offset := hoogte_int_offset[org_rel];
 		}
 	}
-	
 }
