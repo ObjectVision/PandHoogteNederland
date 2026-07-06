@@ -6,6 +6,7 @@ container Units
 	unit<float64> cm         := 0.01 * m               ,label = "centimeter";
 	unit<uint16>  cm_uint16  := uint16(cm)             ,label = "centimeter uint16";
 	unit<int16>   cm_int16   := int16(cm)              ,label = "centimeter int16";
+	unit<int32>   cm_int32   := int32(cm)              ,label = "centimeter int32"; // AHN tifs bevatten hoogte + offset in cm; boven 32767 cm (~228m NAP) wrapt int16 -> int32 intern
 	unit<int16>   jaar;
 	unit<uint16>  Yr;
 }

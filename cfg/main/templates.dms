@@ -29,12 +29,15 @@ container Templates : Using = "Units;Geography"
 		// begin case parameters
 		unit<uint32> pand_subset;
 		unit<ipoint> GridDomain;
-		attribute<cm_int16> hoogte_ruw_offset (GridDomain); //dsm   /sourcedata/AHN/DSM/cell_1_6/heights/height
-		attribute<cm_int16> hoogte_int_offset (GridDomain); //dtm
+		attribute<cm_int32> hoogte_ruw_offset (GridDomain); //dsm   /sourcedata/AHN/DSM/cell_1_6/heights/height
+		attribute<cm_int32> hoogte_int_offset (GridDomain); //dtm
 		// end case parameters
 
 		attribute<pand_subset> pand_subset_rel (GridDomain) := poly2grid(pand_subset/geometry, GridDomain);
-		
+
+		// hoogte van objecten boven maaiveld (DSM - DTM) per cel; voor onderkant-kwaliteitscheck
+		attribute<cm_int32> object_hoogte (GridDomain) := hoogte_ruw_offset - hoogte_int_offset;
+
 		container hoogte
 		{
 			container impl
@@ -48,7 +51,7 @@ container Templates : Using = "Units;Geography"
 					{
 						attribute<rdc_meter>   geometry        := union_data(., max/buffer_points/geometry        , min/buffer_points/geometry);
 						attribute<pand_subset> pand_subset_rel := union_data(., max/buffer_points/pand_subset_rel, min/buffer_points/pand_subset_rel);
-						attribute<cm_int16>    hoogte_offset   := union_data(., max/buffer_points/hoogte_offset, min/buffer_points/hoogte_offset);
+						attribute<cm_int32>    hoogte_offset   := union_data(., max/buffer_points/hoogte_offset, min/buffer_points/hoogte_offset);
 						attribute<string>      key             := string(pointCol(geometry)) + '_' + string(pointRow(geometry)) + '_' + string(pand_subset_rel);
 					}
 
@@ -57,24 +60,48 @@ container Templates : Using = "Units;Geography"
 						attribute<all>         all_rel         := rlookup(values, all/key);
 						attribute<rdc_meter>   geometry        := all/geometry[all_rel];
 						attribute<pand_subset> pand_subset_rel := all/pand_subset_rel[all_rel];
-						attribute<cm_int16>    hoogte_offset   := all/hoogte_offset[all_rel];
+						attribute<cm_int32>    hoogte_offset   := all/hoogte_offset[all_rel];
 					}
 				}
-			 	attribute<cm_int16> pand_hoogte_offset     (pand_subset) := mean(hoogte_ruw_offset, pand_subset_rel); //20260616 EO geeft aan dat dit mogelijk beter werkt dan de rth-element, nog volledig gevalideerd.
-				// attribute<cm_int16> pand_hoogte_offset     (pand_subset) := rth_element(hoogte_ruw_offset, 0.6f, pand_subset_rel); // 0.6 voor ahn5/6 (Erik), origineel 0.7
-				attribute<cm_int16> pand_hoogte_offset_nok (pand_subset) := rth_element(hoogte_ruw_offset, 0.8f, pand_subset_rel); // 0.8 voor ahn5/6 (Erik), origineel 0.9
+				// 20260622 terug naar percentiel: mean() gaf lage bias (randpixels tellen mee + pieken worden weggemiddeld,
+				// waardoor het hoogste gebouw uit de top verdween). 0.7 = origineel; Erik had naar 0.6 verlaagd voor ahn5/6.
+				// 0.6 vs 0.7 nog valideren tegen referentie (3D BAG / handmatig sample).
+			 	attribute<cm_int32> pand_hoogte_offset     (pand_subset) := rth_element(hoogte_ruw_offset, 0.7f, pand_subset_rel);
+				// attribute<cm_int32> pand_hoogte_offset     (pand_subset) := mean(hoogte_ruw_offset, pand_subset_rel); // EO-voorstel 20260616; onderschat structureel.
+				attribute<cm_int32> pand_hoogte_offset_nok (pand_subset) := rth_element(hoogte_ruw_offset, 0.8f, pand_subset_rel); // 0.8 voor ahn5/6 (Erik), origineel 0.9
+				attribute<cm_int32> pand_hoogte_offset_top (pand_subset) := rth_element(hoogte_ruw_offset, 0.99f, pand_subset_rel); // ruis-robuuste piek (~max) voor echte tophoogte van torens
 
-				attribute<cm_int16> buffer_hoogte_offset   (pand_subset) := rth_element(buffer_points/unique/hoogte_offset, 0.15f, buffer_points/unique/pand_subset_rel);
+				attribute<cm_int32> buffer_hoogte_offset   (pand_subset) := rth_element(buffer_points/unique/hoogte_offset, 0.15f, buffer_points/unique/pand_subset_rel);
+
+				// onderkant-kwaliteit
+				attribute<uint32>   n_pixels               (pand_subset) := uint32(pcount(pand_subset_rel));
+				attribute<uint32>   n_pixels_boven_mv      (pand_subset) := uint32(pcount(object_hoogte > /Parameters/min_pandhoogte ? pand_subset_rel : (0 / 0)[pand_subset]));
 			}
 
-			attribute<cm_int16> pand (pand_subset) :=
+			// ruwe pandhoogte (voor drempel); verschil past ruim in int16, maar int32 houdt de keten consistent
+			attribute<cm_int32> pand_raw (pand_subset) :=
 				(isDefined(impl/pand_hoogte_offset) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset > impl/buffer_hoogte_offset))
 					? sub_or_null(impl/pand_hoogte_offset, impl/buffer_hoogte_offset)
-					: (0 / 0)[cm_int16];
-			attribute<cm_int16> nok  (pand_subset) :=
+					: (0 / 0)[cm_int32];
+
+			// betrouwbaar = boven minimumhoogte EN genoeg dakpixels boven maaiveld
+			// (te laag of geen object in DSM => nieuw/gesloopt pand of geen recente AHN-dekking)
+			attribute<bool> betrouwbaar (pand_subset) :=
+				isDefined(pand_raw)
+				&& pand_raw >= /Parameters/min_pandhoogte
+				&& impl/n_pixels_boven_mv >= /Parameters/min_pixels_boven_mv;
+
+			attribute<cm_int32> pand (pand_subset) := betrouwbaar ? pand_raw : (0 / 0)[cm_int32];
+
+			attribute<cm_int32> nok  (pand_subset) :=
 				(isDefined(impl/pand_hoogte_offset_nok) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset_nok > impl/buffer_hoogte_offset))
 					? sub_or_null(impl/pand_hoogte_offset_nok, impl/buffer_hoogte_offset)
-					: (0 / 0)[cm_int16];
+					: (0 / 0)[cm_int32];
+
+			attribute<cm_int32> top  (pand_subset) :=
+				(isDefined(impl/pand_hoogte_offset_top) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset_top > impl/buffer_hoogte_offset))
+					? sub_or_null(impl/pand_hoogte_offset_top, impl/buffer_hoogte_offset)
+					: (0 / 0)[cm_int32];
 		}
 	}
 
@@ -97,11 +124,11 @@ container Templates : Using = "Units;Geography"
 
 		attribute<pand_subset> buffer (GridDomain) := isDefined(pand_subset_rel) ? (0 / 0)[pand_subset] : pand_met_buffer;
 
-		unit<uint64> buffer_points := select_with_org_rel(isDefined(buffer) && isDefined(hoogte_int_offset) && hoogte_int_offset > 0[cm_int16])
+		unit<uint64> buffer_points := select_with_org_rel(isDefined(buffer) && isDefined(hoogte_int_offset) && hoogte_int_offset > 0[cm_int32])
 		{
 			attribute<rdc_meter> geometry      := org_rel[rdc_meter];
 			attribute<pand_subset> pand_subset_rel := buffer[org_rel];
-			attribute<cm_int16>  hoogte_offset := hoogte_int_offset[org_rel];
+			attribute<cm_int32>  hoogte_offset := hoogte_int_offset[org_rel];
 		}
 	}
 }

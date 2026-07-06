@@ -68,6 +68,8 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 
 		container Read_AHN_Data
 		{
+			// int32: tif-waarden (cm, incl. hoogte-offset) kunnen boven 32767 uitkomen (Zuid-Limburg > ~228m NAP);
+			// int16-conversie wrapte daar naar negatief -> alle panden null
 			unit<ipoint> DTM
 			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DTM/'+Start/Tile_name+'_05m.tif'"
 			,	StorageType     = "gdal.grid"
@@ -76,7 +78,7 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			,  	ExplicitSuppliers = "Start/Tile_name"
 			{
 				attribute<cm_uint16>      GridData;
-				attribute<cm_int16>       height         := GridData[cm_int16];
+				attribute<cm_int32>       height         := GridData[cm_int32];
 			}
 			unit<ipoint> DSM
 			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Start/Tile_name+'_05m.tif'"
@@ -86,12 +88,23 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			,  	ExplicitSuppliers = "Start/Tile_name"
 			{
 				attribute<cm_uint16>      GridData;
-				attribute<cm_int16>       height         := GridData[cm_int16];
+				attribute<cm_int32>       height         := GridData[cm_int32];
+			}
+			// OPTIONEEL: AHN-bron/provenance per cel (welke AHN-versie). Vereist <tile>_src.tif in de DSM-map.
+			// Ontbreken die bestanden -> dit unit + prov_local + ahn_bron_min/max + de twee union-regels uitcommenten.
+			unit<ipoint> DSM_src
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Start/Tile_name+'_src.tif'"
+			,	StorageType     = "gdal.grid"
+			,	DialogData      = "rdc_meter"
+			,	StorageReadOnly = "True"
+			,  	ExplicitSuppliers = "Start/Tile_name"
+			{
+				attribute<uint8> GridData;
 			}
 		}
 
-		attribute<cm_int16> dsm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int16, Read_AHN_Data/DSM/height);
-		attribute<cm_int16> dtm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int16, Read_AHN_Data/DTM/height);
+		attribute<cm_int32> dsm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int32, Read_AHN_Data/DSM/height);
+		attribute<cm_int32> dtm_local (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, cm_int32, Read_AHN_Data/DTM/height);
 
 		container Bepaal_hoogtes_en_daken := Templates/bepaal_hoogtes_en_daken_T(
 			pand_subset
@@ -100,15 +113,30 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			, dtm_local
 		);
 
+		// OPTIONEEL: AHN-bron per pand (oudste/nieuwste AHN-versie over footprint). Vereist DSM_src (<tile>_src.tif).
+		// hergebruik poly2grid uit de template i.p.v. tweede keer rekenen
+		attribute<uint8>       prov_local    (AreaOfInterest/domain) := raster_merge(AreaOfInterest/domain, uint8, Read_AHN_Data/DSM_src/GridData);
+		attribute<uint8>       ahn_bron_min_pand (pand_subset)       := min(prov_local, Bepaal_hoogtes_en_daken/pand_subset_rel); // oudste AHN-bron
+		attribute<uint8>       ahn_bron_max_pand (pand_subset)       := max(prov_local, Bepaal_hoogtes_en_daken/pand_subset_rel); // nieuwste AHN-bron
+
 		unit<uint32> WriteResults
 		: StorageName = "='%LocalDataProjDir%/Temp/PHN_'+/Parameters/BAG_Date+'_'+Tile_name+'.mmd'"
 		,  	ExplicitSuppliers = "Start/Tile_name"
 		{
 			attribute<rdc_meter> geometry          (poly, pand_subset) := pand_subset/geometry;
 			attribute<uint64>    pand_bag_nr             (pand_subset) := pand_subset/pand_bag_nr;
-			attribute<int16>     hoogte                  (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/pand;
-			attribute<int16>     hoogte_nok              (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/nok;
-			attribute<int16>     hoogte_maaiveld_offset  (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/impl/buffer_hoogte_offset;
+			// pandhoogtes (verschillen) passen ruim in int16; maaiveld_offset (absoluut, incl. tif-offset) niet -> int32
+			attribute<int16>     hoogte                  (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/pand);
+			attribute<int16>     hoogte_ruw              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/pand_raw); // ongedrempeld, voor validatie van betrouwbaar-drempels
+			attribute<int16>     hoogte_nok              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/nok);
+			attribute<int16>     hoogte_top              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/top);
+			attribute<int32>     hoogte_maaiveld_offset  (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/impl/buffer_hoogte_offset);
+			attribute<bool>      betrouwbaar             (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/betrouwbaar;
+			attribute<uint16>    bouwjaar                (pand_subset) := uint16(pand_subset/Bouwjaar);
+			attribute<uint32>    n_pixels                (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/impl/n_pixels;
+			attribute<uint32>    n_pixels_boven_mv       (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/impl/n_pixels_boven_mv;
+			attribute<uint8>     ahn_bron_min            (pand_subset) := ahn_bron_min_pand; // OPTIONEEL (provenance)
+			attribute<uint8>     ahn_bron_max            (pand_subset) := ahn_bron_max_pand; // OPTIONEEL (provenance)
 		}
 
 		container GetResults 
@@ -129,13 +157,22 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 		attribute<rdc_meter> geometry         (poly) := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/geometry', ',')+ ')';
 		attribute<uint64>    pand_bag_nr             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/pand_bag_nr', ',')+ ')';
 		attribute<int16>     hoogte                  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte', ',')+ ')';
+		attribute<int16>     hoogte_ruw              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_ruw', ',')+ ')';
 		attribute<int16>     hoogte_nok              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_nok', ',')+ ')';
-		attribute<int16>     hoogte_maaiveld_offset  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_maaiveld_offset', ',') + ')';
+		attribute<int16>     hoogte_top              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_top', ',')+ ')';
+		attribute<int32>     hoogte_maaiveld_offset  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_maaiveld_offset', ',') + ')';
+		attribute<bool>      betrouwbaar             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/betrouwbaar', ',')+ ')';
+		attribute<uint16>    bouwjaar                := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/bouwjaar', ',')+ ')';
+		attribute<uint32>    n_pixels                := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/n_pixels', ',')+ ')';
+		attribute<uint32>    n_pixels_boven_mv       := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/n_pixels_boven_mv', ',')+ ')';
+		attribute<uint8>     ahn_bron_min            := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/ahn_bron_min', ',')+ ')'; // OPTIONEEL (provenance)
+		attribute<uint8>     ahn_bron_max            := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/ahn_bron_max', ',')+ ')'; // OPTIONEEL (provenance)
 	}
 
 	unit<uint32> Read_Result
 	: StorageName = "='%LocalDataProjDir%/PHN_'+/Parameters/BAG_Date+'.mmd'"
 	, StorageReadOnly = "true"
 	{
+		attribute<uint16> bouwjaar_if_betrouwbaar := betrouwbaar ? bouwjaar : null_w;
 	}
 }

@@ -18,6 +18,10 @@ container PHN
 		parameter<string> BAG_FileDate   := '20260108';
 		parameter<string> BAG_RecentYear := left(BAG_FileDate, 4);
 		parameter<string> BAG_Date       := '20260101';
+
+		// onderkant-kwaliteitsdrempels (zie templates/bepaal_hoogtes_en_daken_T)
+		parameter<Units/cm_int32> min_pandhoogte      := 100[Units/cm_int32]; // < 1 m = fysiek onmogelijk pand -> null/onbetrouwbaar
+		parameter<uint32>         min_pixels_boven_mv := uint32(4);            // < 1 m2 dak boven maaiveld (0.5m grid) -> onbetrouwbaar
 	}
 	
 	#include <units.dms>
