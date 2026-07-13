@@ -84,11 +84,12 @@ container Templates : Using = "Units;Geography"
 					? sub_or_null(impl/pand_hoogte_offset, impl/buffer_hoogte_offset)
 					: (0 / 0)[cm_int32];
 
-			// betrouwbaar = boven minimumhoogte EN genoeg dakpixels boven maaiveld
-			// (te laag of geen object in DSM => nieuw/gesloopt pand of geen recente AHN-dekking)
+			// betrouwbaar = binnen fysieke grenzen EN genoeg dakpixels boven maaiveld
+			// te laag/geen object => nieuw/gesloopt pand of geen AHN-dekking; te hoog (>250m) => DSM-artefact
 			attribute<bool> betrouwbaar (pand_subset) :=
 				isDefined(pand_raw)
 				&& pand_raw >= /Parameters/min_pandhoogte
+				&& pand_raw <= /Parameters/max_pandhoogte
 				&& impl/n_pixels_boven_mv >= /Parameters/min_pixels_boven_mv;
 
 			attribute<cm_int32> pand (pand_subset) := betrouwbaar ? pand_raw : (0 / 0)[cm_int32];

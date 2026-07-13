@@ -125,11 +125,11 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 		{
 			attribute<rdc_meter> geometry          (poly, pand_subset) := pand_subset/geometry;
 			attribute<uint64>    pand_bag_nr             (pand_subset) := pand_subset/pand_bag_nr;
-			// pandhoogtes (verschillen) passen ruim in int16; maaiveld_offset (absoluut, incl. tif-offset) niet -> int32
-			attribute<int16>     hoogte                  (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/pand);
-			attribute<int16>     hoogte_ruw              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/pand_raw); // ongedrempeld, voor validatie van betrouwbaar-drempels
-			attribute<int16>     hoogte_nok              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/nok);
-			attribute<int16>     hoogte_top              (pand_subset) := int16(Bepaal_hoogtes_en_daken/hoogte/top);
+			// alles int32: int16() nult stil alles > 327 m (bij nok/top van artefact-panden), dus niet gebruiken
+			attribute<int32>     hoogte                  (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/pand);
+			attribute<int32>     hoogte_ruw              (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/pand_raw); // ongedrempeld, voor validatie/artefactopsporing
+			attribute<int32>     hoogte_nok              (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/nok);
+			attribute<int32>     hoogte_top              (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/top);
 			attribute<int32>     hoogte_maaiveld_offset  (pand_subset) := int32(Bepaal_hoogtes_en_daken/hoogte/impl/buffer_hoogte_offset);
 			attribute<bool>      betrouwbaar             (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/betrouwbaar;
 			attribute<uint16>    bouwjaar                (pand_subset) := uint16(pand_subset/Bouwjaar);
@@ -156,10 +156,10 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 	{
 		attribute<rdc_meter> geometry         (poly) := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/geometry', ',')+ ')';
 		attribute<uint64>    pand_bag_nr             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/pand_bag_nr', ',')+ ')';
-		attribute<int16>     hoogte                  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte', ',')+ ')';
-		attribute<int16>     hoogte_ruw              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_ruw', ',')+ ')';
-		attribute<int16>     hoogte_nok              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_nok', ',')+ ')';
-		attribute<int16>     hoogte_top              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_top', ',')+ ')';
+		attribute<int32>     hoogte                  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte', ',')+ ')';
+		attribute<int32>     hoogte_ruw              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_ruw', ',')+ ')';
+		attribute<int32>     hoogte_nok              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_nok', ',')+ ')';
+		attribute<int32>     hoogte_top              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_top', ',')+ ')';
 		attribute<int32>     hoogte_maaiveld_offset  := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/hoogte_maaiveld_offset', ',') + ')';
 		attribute<bool>      betrouwbaar             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/betrouwbaar', ',')+ ')';
 		attribute<uint16>    bouwjaar                := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/bouwjaar', ',')+ ')';

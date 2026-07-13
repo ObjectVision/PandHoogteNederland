@@ -19,9 +19,10 @@ container PHN
 		parameter<string> BAG_RecentYear := left(BAG_FileDate, 4);
 		parameter<string> BAG_Date       := '20260101';
 
-		// onderkant-kwaliteitsdrempels (zie templates/bepaal_hoogtes_en_daken_T)
-		parameter<Units/cm_int32> min_pandhoogte      := 100[Units/cm_int32]; // < 1 m = fysiek onmogelijk pand -> null/onbetrouwbaar
-		parameter<uint32>         min_pixels_boven_mv := uint32(4);            // < 1 m2 dak boven maaiveld (0.5m grid) -> onbetrouwbaar
+		// kwaliteitsdrempels (zie templates/bepaal_hoogtes_en_daken_T)
+		parameter<Units/cm_int32> min_pandhoogte      := 100[Units/cm_int32];   // < 1 m = fysiek onmogelijk pand -> onbetrouwbaar
+		parameter<Units/cm_int32> max_pandhoogte      := 25000[Units/cm_int32]; // > 250 m = geen NL-gebouw (hoogste ~215m) -> DSM-artefact -> onbetrouwbaar
+		parameter<uint32>         min_pixels_boven_mv := uint32(4);             // < 1 m2 dak boven maaiveld (0.5m grid) -> onbetrouwbaar
 	}
 	
 	#include <units.dms>
