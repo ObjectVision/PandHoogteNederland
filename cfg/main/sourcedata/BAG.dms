@@ -55,7 +55,7 @@ container BAG
 						}
 						
 						attribute<m2>        area_reversed            := area(geometry_reversed, m2);
-						attribute<rdc_meter> geometry_reversed (poly) := points2sequence(seq_points/points_reversed, seq_points/Sequence_rel_Reversed);
+						attribute<rdc_meter> geometry_reversed (poly) := points2polygon(seq_points/points_reversed, seq_points/Sequence_rel_Reversed);
 					}
 				
 					attribute<Int32>                        TIJDSTIPREGISTRATIE          := int32(replace(substr(Import/meta/TIJDSTIPREGISTRATIE,0,10),'-',''));
