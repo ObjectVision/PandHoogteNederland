@@ -35,9 +35,6 @@ container Templates : Using = "Units;Geography"
 
 		attribute<pand_subset> pand_subset_rel (GridDomain) := poly2grid(pand_subset/geometry, GridDomain);
 
-		// hoogte van objecten boven maaiveld (DSM - DTM) per cel; voor onderkant-kwaliteitscheck
-		attribute<cm_int32> object_hoogte (GridDomain) := hoogte_ruw_offset - hoogte_int_offset;
-
 		container hoogte
 		{
 			container impl
@@ -73,9 +70,12 @@ container Templates : Using = "Units;Geography"
 
 				attribute<cm_int32> buffer_hoogte_offset   (pand_subset) := rth_element(buffer_points/unique/hoogte_offset, 0.15f, buffer_points/unique/pand_subset_rel);
 
-				// onderkant-kwaliteit
+				// onderkant-kwaliteit: dakpixels tellen t.o.v. het per-pand buffermaaiveld (DTM naast pand).
+				// NIET DSM-DTM per cel: in AHN6-tegels (Zwolle/Arnhem/Groningen) bevat de DTM onder panden
+				// het dak i.p.v. geinterpoleerd maaiveld, waardoor DSM-DTM daar ~0 was en ~50% onterecht afviel.
+				attribute<cm_int32> pand_maaiveld_cel      (GridDomain)  := buffer_hoogte_offset[pand_subset_rel];
 				attribute<uint32>   n_pixels               (pand_subset) := uint32(pcount(pand_subset_rel));
-				attribute<uint32>   n_pixels_boven_mv      (pand_subset) := uint32(pcount(object_hoogte > /Parameters/min_pandhoogte ? pand_subset_rel : (0 / 0)[pand_subset]));
+				attribute<uint32>   n_pixels_boven_mv      (pand_subset) := uint32(pcount(hoogte_ruw_offset > pand_maaiveld_cel + /Parameters/min_pandhoogte ? pand_subset_rel : (0 / 0)[pand_subset]));
 			}
 
 			// ruwe pandhoogte (voor drempel); verschil past ruim in int16, maar int32 houdt de keten consistent
