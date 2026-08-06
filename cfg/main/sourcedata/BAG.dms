@@ -2,9 +2,10 @@ container BAG
 {
 	container VolledigeBAG
 	: Descr = "Volledige BAG dataset, oftewel met alle historische statussen."
+	, Source = "Deze dataset kan oa gegeneerd worden in de RuimteScanner, /SourceData/Vastgoed/BAG/MaakVolledigeBAG/MaakVolledigeBAGTabel"
 	{ 
 		parameter<String>  Snapshot_Date_Input      := Parameters/BAG_FileDate;
-		parameter<String>  BAG_dir           := '%RSo_DataDir%/Vastgoed/VolledigeTabel_' + Snapshot_Date_Input;
+		parameter<String>  BAG_dir                  := '%RSo_DataDir%/Vastgoed/VolledigeTabel_' + Snapshot_Date_Input;
 		parameter<Int32>   MaxDatum                 := 20500101i;
 		parameter<String>  Bouwjaar_truncation_Expr := 'Bouwjaar <= 1005w || Bouwjaar > @YYYY@[yr] ? null_w : Bouwjaar < 1500w ? 1500w : Bouwjaar';
 		parameter<String>  max_Bouwjaar             := string(Parameters/BAG_RecentYear);

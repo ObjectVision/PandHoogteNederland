@@ -31,6 +31,7 @@ container PHN
 	#include <sourcedata.dms>
 	#include <results.dms>
 	#include <templates.dms>
+	#include <ExportSettings.dms>
 
 	container ConfigSettings
 	{
