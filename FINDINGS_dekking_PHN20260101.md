@@ -1,5 +1,33 @@
 # Bevinding: dekkingsgat in PHN_20260101 (juli 2026)
 
+## Status (28 september 2026): opgelost
+
+Alles hieronder is gemeten op de versie van vóór commit 2cae564 (14 juli 2026).
+De oorzaak was niet de tegeldekking, maar de AHN6-DTM, die onder panden het dak
+bevat. Daardoor viel het criterium `n_pixels_boven_mv` (DSM−DTM) in de
+AHN6-tegels massaal weg. De vermoedelijke oorzaak hieronder ("AHN5/AHN6-inwinning
+nog niet compleet") klopt dus niet.
+
+Nagemeten op de herberekende versie van 14 juli, 21:33. Die is byte-identiek in
+`E:/SourceData/PHN`, `RSopen/Vastgoed` en de Hestia-VolledigeTabel:
+
+- De 11.158.253 panden zijn de BAG-voorraad op 1-1-2026 (levering 20260710), op
+  104 panden na. 115.438 panden (1,03%) hebben geen hoogte.
+- De uitval is niet meer regionaal geclusterd: Zwolle 1,2%, Arnhem 0,4%,
+  Groningen 1,0%, Assen 0,5%, Deventer 0,8%, Ede 0,6%, Apeldoorn 0,3%.
+- De uitval zit in nieuwbouw van na de vlucht:
+  - bouwjaar tot en met 2022: minder dan 1%;
+  - 2023: 7,7%;
+  - 2024: 24%;
+  - 2025: 50%.
+- Bron per pand: AHN5 74%, AHN6 26%, AHN4 0,1%.
+- Er is één echt lokaal gat: in de tegels `cell_17_23` en `cell_19_23` (rond
+  Lemmer en in Steenwijkerland) ontbreken DSM-waarden. Daar heeft 12–20% van de
+  panden geen hoogte, ongeveer 1.900 panden.
+
+De PHN-2023-fallback in BAG-Tools (`cfg/Geocode/BAG.dms`) is daarmee grotendeels
+overbodig. Het commentaar daar ("AHN5 nog niet landsdekkend") is achterhaald.
+
 Geconstateerd tijdens het geocoderen van 4,36 mln NVM-transacties met BAG-Tools
 (`cfg/Geocode`, PHN als hoogtebron). Deze notitie legt vast **wat** we hebben
 gemeten, **wat de vermoedelijke oorzaak** is en **hoe het te verifiëren** op de
