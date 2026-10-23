@@ -1,4 +1,4 @@
-container Templates : Using = "Units;Geography"
+container Templates : Using = "Units;Geography;Classifications"
 {
 	template define_grid_T
 	{
@@ -103,6 +103,184 @@ container Templates : Using = "Units;Geography"
 				(isDefined(impl/pand_hoogte_offset_top) && isDefined(impl/buffer_hoogte_offset) && (impl/pand_hoogte_offset_top > impl/buffer_hoogte_offset))
 					? sub_or_null(impl/pand_hoogte_offset_top, impl/buffer_hoogte_offset)
 					: (0 / 0)[cm_int32];
+		}
+
+		// inhoud en dakanalyse overgenomen uit TDAAnalytics_pandkenmerken_kwartaalupdate (stam/schemas/bag_blad/bepaal_hoogtes_en_daken.dms);
+		// verschil: de correctie bij te weinig AHN-waarnemingen gebruikt de PHN-pandhoogte (rth 0.7, alleen als betrouwbaar)
+		container inhoud
+		{
+			container referentie
+			{
+				attribute<m2>     pand_oppervlakte                     (pand_subset) := area(pand_subset/geometry, m2);
+				attribute<uint32> verwachte_ahn_waarnemingen           (pand_subset) := value(pand_oppervlakte / 0.25[m2], uint32);
+				attribute<uint32> ahn_waarnemingen_na_interpolatie     (pand_subset) := count(potential/hoogte_ahn_met_interpolatie, pand_subset_rel);
+				attribute<int32>  missende_observaties_na_interpolatie (pand_subset) := verwachte_ahn_waarnemingen[int32] - ahn_waarnemingen_na_interpolatie[int32];
+
+				container teveel_ahn_waarnemingen
+				{
+					attribute<bool> heeft_teveel   (pand_subset) := missende_observaties_na_interpolatie < 0i;
+					attribute<m3>   pand_inhoud_m3 (pand_subset) := heeft_teveel
+						? (float64(verwachte_ahn_waarnemingen) / float64(ahn_waarnemingen_na_interpolatie)) * basic/pand_inhoud_m3
+						: (0 / 0)[m3];
+				}
+				container teweinig_ahn_waarnemingen
+				{
+					attribute<bool> heeft_teweinig (pand_subset) := missende_observaties_na_interpolatie > 0i;
+					attribute<m3>   pand_inhoud_m3 (pand_subset) := heeft_teweinig
+						? basic/pand_inhoud_m3 + (float64(missende_observaties_na_interpolatie) * (hoogte/pand[cm] * 50[cm] * 50[cm])[m3])
+						: (0 / 0)[m3];
+				}
+				container evenveel_ahn_waarnemingen
+				{
+					attribute<bool> heeft_evenveel (pand_subset) := missende_observaties_na_interpolatie == 0i;
+					attribute<m3>   pand_inhoud_m3 (pand_subset) := heeft_evenveel ? basic/pand_inhoud_m3 : (0 / 0)[m3];
+				}
+
+				attribute<m3>    pand_inhoud_m3                     (pand_subset) :=
+					MakeDefined(evenveel_ahn_waarnemingen/pand_inhoud_m3, MakeDefined(teveel_ahn_waarnemingen/pand_inhoud_m3, teweinig_ahn_waarnemingen/pand_inhoud_m3));
+				attribute<ratio> ratio_ahn_waarn_tov_verwacht_waarn (pand_subset) := float64(ahn_waarnemingen_na_interpolatie) / float64(verwachte_ahn_waarnemingen);
+			}
+
+			// float32 (cm, incl. offset) omdat de kernel float32 is; gaten (null of 0) in de DSM gevuld met het gewogen gemiddelde van de buren
+			container potential
+			{
+				attribute<float32> hoogte_ruw                  (GridDomain) := float32(hoogte_ruw_offset);
+				attribute<float32> hoogte_interpolatie         (GridDomain) :=
+					  potential(hoogte_ruw                       , Geography/kernel_buffer/distMatr)
+					/ potential(hoogte_ruw > 0f ? 1f : 0f        , Geography/kernel_buffer/distMatr);
+				attribute<float32> hoogte_ahn_met_interpolatie (GridDomain) := (isNull(hoogte_ruw) || hoogte_ruw == 0f) ? hoogte_interpolatie : hoogte_ruw;
+			}
+
+			container basic
+			{
+				attribute<float32> buffer_hoogte_grid (GridDomain)  := float32(hoogte/impl/buffer_hoogte_offset[pand_subset_rel]);
+				attribute<cm3>     pand_inhoud_cm3    (pand_subset) := value(float64(sum(potential/hoogte_ahn_met_interpolatie - buffer_hoogte_grid, pand_subset_rel)), cm) * 50[cm] * 50[cm];
+				attribute<m3>      pand_inhoud_m3     (pand_subset) := pand_inhoud_cm3[m3];
+			}
+		}
+
+		container dak
+		{
+			attribute<cm>         hoogtes_in_pand (GridDomain) := isDefined(pand_subset_rel) ? hoogte_ruw_offset[cm] - 10000[cm] : (0 / 0)[cm];
+			attribute<GridDomain> idGrid          (GridDomain) := id(GridDomain);
+			attribute<cm_int32>   pand_buffer_hoogte_offset (pand_subset) := hoogte/impl/buffer_hoogte_offset; // alias: in pand_dakvlak verwijst 'hoogte' naar het eigen attribuut
+
+			container gradient
+			{
+				attribute<cm>         N             (GridDomain) := hoogtes_in_pand[(idGrid) - point_xy(0i, 1i, ipoint)] - hoogtes_in_pand[(idGrid)];
+				attribute<cm>         Z             (GridDomain) := hoogtes_in_pand[(idGrid) + point_xy(0i, 1i, ipoint)] - hoogtes_in_pand[(idGrid)];
+				attribute<cm>         O             (GridDomain) := hoogtes_in_pand[(idGrid) - point_xy(1i, 0i, ipoint)] - hoogtes_in_pand[(idGrid)];
+				attribute<cm>         W             (GridDomain) := hoogtes_in_pand[(idGrid) + point_xy(1i, 0i, ipoint)] - hoogtes_in_pand[(idGrid)];
+
+				attribute<cm>         X             (GridDomain) := hoogtes_in_pand[(idGrid) - point_xy(1i, 0i, ipoint)] - hoogtes_in_pand[(idGrid) + point_xy(1i, 0i, ipoint)];
+				attribute<cm>         Y             (GridDomain) := hoogtes_in_pand[(idGrid) + point_xy(0i, 1i, ipoint)] - hoogtes_in_pand[(idGrid) - point_xy(0i, 1i, ipoint)];
+
+				attribute<cm>         amplitude     (GridDomain) := abs(N) + abs(Z) + abs(O) + abs(W);
+				attribute<stijlheid>  stijlheid_rel (GridDomain) := classify(amplitude, stijlheid/ClassBreaks);
+
+				parameter<float64>    rc := 1.0 + sqrt(2.0);
+
+				attribute<windstreek> windstreek_rel (GridDomain) := switch(
+					 case(amplitude <= 10[cm] , 8[windstreek])
+					,case( (Y >= (rc * abs(X))), 0[windstreek])
+					,case( (Y <  (rc * X)) && X <= (rc * Y), 1[windstreek])
+					,case( (X >= (rc * abs(Y))), 2[windstreek])
+					,case((-Y <  (rc * X)) && X <= (rc * -Y), 3[windstreek])
+					,case((-Y >= (rc * abs(X))), 4[windstreek])
+					,case((-Y <  (rc * -X)) && -X <= (rc *  -Y), 5[windstreek])
+					,case((-X >= (rc * abs(Y))), 6[windstreek])
+					,case(( Y <  (rc * -X)) && -X <= (rc *  Y), 7[windstreek])
+					,9[windstreek]
+				);
+
+				attribute<daktype>    daktype_rel   (GridDomain) := Classify(windstreek_rel * 10b + stijlheid_rel, daktype/key);
+			}
+
+			// perc_vlak: aandeel dakcellen met stijlheid 'vlak'
+			attribute<uint32> nr_cellen_vlak          (pand_subset) := sum(gradient/stijlheid_rel == stijlheid/V/vlak ? 1 : 0, pand_subset_rel);
+			attribute<uint32> nr_cellen_met_stijlheid (pand_subset) := sum(isDefined(gradient/stijlheid_rel)     ? 1 : 0, pand_subset_rel);
+			attribute<uint8>  perc_vlak               (pand_subset) := uint8(round((100f * float32(nr_cellen_vlak)) / (float32(nr_cellen_met_stijlheid))));
+
+			container kromming
+			{
+				attribute<cm>   X               (GridDomain) := hoogtes_in_pand[(idGrid) + point_xy( 1i, 0i,ipoint)] + hoogtes_in_pand[(idGrid) - point_xy( 1i, 0i,ipoint)] - 2.0 * hoogtes_in_pand;
+				attribute<cm>   Y               (GridDomain) := hoogtes_in_pand[(idGrid) + point_xy( 0i, 1i,ipoint)] + hoogtes_in_pand[(idGrid) - point_xy( 0i, 1i,ipoint)] - 2.0 * hoogtes_in_pand;
+				attribute<bool> isOnderdeelVlak (GridDomain) := abs(kromming/X) <= 30[cm] && abs(kromming/Y) <= 30[cm];
+			}
+
+			container vlakken
+			{
+				attribute<daktype> daktype_rel_vlak (GridDomain) := kromming/isOnderdeelVlak ? gradient/daktype_rel : (0 / 0)[daktype];
+				unit<uint32> districts := district(daktype_rel_vlak)
+				{
+					attribute<uint64> unieke_districts_rel (GridDomain) := rlookup(districts, unieke_districts/values);
+				}
+				unit<uint64> unieke_districts := unique(districts/districts)
+				{
+					attribute<uint64> nr_cellen := pcount(districts/unieke_districts_rel);
+				}
+				unit<uint32> plus_1m2 := select_uint32_with_attr_by_org_rel(unieke_districts, unieke_districts/nr_cellen > 4uint64);
+				attribute<plus_1m2>   plus_1m2_rel   (GridDomain) := rlookup(districts/districts, plus_1m2/values);
+				attribute<stijlheid>  stijlheid_rel  (GridDomain) := isDefined(plus_1m2_rel) ? gradient/stijlheid_rel  : (0 / 0)[stijlheid];
+				attribute<windstreek> windstreek_rel (GridDomain) := isDefined(plus_1m2_rel) ? gradient/windstreek_rel : (0 / 0)[windstreek];
+
+				unit<uint32> plus_1m2_rel_points := select_uint32_with_attr_by_org_rel(vlakken, isDefined(plus_1m2_rel))
+				{
+					attribute<pand_subset>  pand_subset_rel_vlak := pand_subset_rel[org_rel];
+					attribute<string>       pand_dakvlak_key     := string(pand_subset_rel_vlak) + '_' + string(plus_1m2_rel);
+					attribute<pand_dakvlak> pand_dakvlak_rel     := rlookup(pand_dakvlak_key, pand_dakvlak/values);
+
+					attribute<cm_int32>     hoogte_offset        := hoogte_ruw_offset[org_rel];
+					attribute<cm>           amplitude            := gradient/amplitude[org_rel];
+
+					attribute<cm>           dX                   := gradient/X[org_rel];
+					attribute<cm>           dY                   := gradient/Y[org_rel];
+
+					attribute<rdc_meter>    geometry             := org_rel[rdc_meter];
+					attribute<m>            X                    := pointCol(geometry)[m];
+					attribute<m>            Y                    := pointRow(geometry)[m];
+				}
+
+				unit<uint32> pand_dakvlak := unique(plus_1m2_rel_points/pand_dakvlak_key)
+				,	DialogType = "Map"
+				,	DialogData = "geometry"
+				{
+					attribute<rdc_meter> geometry (poly) := points2sequence(geom/pointset/point, geom/pointset/sequence, geom/pointset/ordinal);
+					container geom
+					{
+						attribute<m> minX (pand_dakvlak) := min(plus_1m2_rel_points/X, plus_1m2_rel_points/pand_dakvlak_rel);
+						attribute<m> minY (pand_dakvlak) := min(plus_1m2_rel_points/Y, plus_1m2_rel_points/pand_dakvlak_rel);
+						attribute<m> maxX (pand_dakvlak) := max(plus_1m2_rel_points/X, plus_1m2_rel_points/pand_dakvlak_rel);
+						attribute<m> maxY (pand_dakvlak) := max(plus_1m2_rel_points/Y, plus_1m2_rel_points/pand_dakvlak_rel);
+
+						unit<uint32> pointset := union_unit(pand_dakvlak, pand_dakvlak, pand_dakvlak, pand_dakvlak, pand_dakvlak)
+						{
+							attribute<rdc_meter>    point    := union_data(., point_xy(minX,maxY,rdc_meter), point_xy(maxX,maxY,rdc_meter), point_xy(maxX,minY,rdc_meter), point_xy(minX,minY,rdc_meter), point_xy(minX,maxY,rdc_meter));
+							attribute<pand_dakvlak> sequence := union_data(., id(pand_dakvlak), id(pand_dakvlak), id(pand_dakvlak), id(pand_dakvlak), id(pand_dakvlak));
+							attribute<uint32>       ordinal  := union_data(., const(0,pand_dakvlak), const(1,pand_dakvlak), const(2,pand_dakvlak), const(3,pand_dakvlak), const(4,pand_dakvlak));
+						}
+					}
+
+					attribute<pand_subset> pand_subset_rel      := rjoin(values, plus_1m2_rel_points/pand_dakvlak_key, plus_1m2_rel_points/pand_subset_rel_vlak);
+					attribute<uint64>      pand_identificatie   := pand_subset/pand_bag_nr[pand_subset_rel];
+
+					attribute<uint32>      nr_m2                := pcount(plus_1m2_rel_points/pand_dakvlak_rel) / 4;
+					attribute<cm>          amplitude            := mean(plus_1m2_rel_points/amplitude, plus_1m2_rel_points/pand_dakvlak_rel);
+					attribute<stijlheid>   co_stijlheid         := classify(amplitude, stijlheid/ClassBreaks);
+					attribute<windstreek>  windstreek_rel       := rjoin(values, plus_1m2_rel_points/pand_dakvlak_key, plus_1m2_rel_points/windstreek_rel);
+
+					attribute<cm_int32>    hoogte_offset        := rth_element(plus_1m2_rel_points/hoogte_offset, 0.7f, plus_1m2_rel_points/pand_dakvlak_rel);
+					attribute<cm_int32>    buffer_hoogte_offset := dak/pand_buffer_hoogte_offset[pand_subset_rel];
+
+					attribute<cm_int32>    hoogte               :=
+						(isDefined(hoogte_offset) && isDefined(buffer_hoogte_offset) && (hoogte_offset > buffer_hoogte_offset))
+							? sub_or_null(hoogte_offset, buffer_hoogte_offset)
+							: (0 / 0)[cm_int32];
+
+					attribute<cm>          dX                   := mean(plus_1m2_rel_points/dX, plus_1m2_rel_points/pand_dakvlak_rel);
+					attribute<cm>          dY                   := mean(plus_1m2_rel_points/dY, plus_1m2_rel_points/pand_dakvlak_rel);
+				}
+			}
 		}
 	}
 

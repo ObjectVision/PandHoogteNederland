@@ -53,6 +53,7 @@ container ExportSettings
 				parameter<string> BAG_FileDate        := /Parameters/BAG_FileDate;
 				parameter<string> BAG_RecentYear      := /Parameters/BAG_RecentYear;
 				parameter<string> BAG_Date            := /Parameters/BAG_Date;
+				parameter<string> BAG_Snapshot        := expand(., /Sourcedata/BAG/Snapshot/BAG_dir);
 				parameter<string> min_pandhoogte      := string(/Parameters/min_pandhoogte);
 				parameter<string> max_pandhoogte      := string(/Parameters/max_pandhoogte);
 				parameter<string> min_pixels_boven_mv := string(/Parameters/min_pixels_boven_mv);

@@ -2,13 +2,7 @@ container Geography: Using = "Units;Classifications"
 {
 	unit<dpoint>  rdc_meter : SpatialReference = "EPSG:28992", DialogData = "ngr_layer"; // wms achtergrondlaag voor kaarten met rd coordinaten
 
-	unit<ipoint>  rdc_mm := // for polygon functions
-		gridset(
-			  rdc_meter
-			, point_xy(0.001d, 0.001d, rdc_meter)
-			, point_xy(0d    , 0d    , rdc_meter)
-			, ipoint
-		);
+	unit<dpoint>  rdc       := rdc_meter; // vereist door de store-dictionary van de BAG-snapshot (bag.mmd)
 
 	unit<ipoint> ahn_tiles_gridset :=
 		gridset(

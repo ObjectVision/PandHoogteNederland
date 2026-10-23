@@ -21,4 +21,41 @@ container Classifications : Using = "Units"
 		attribute<Bool>      IsVoorraad      : [FALSE,  FALSE, FALSE, TRUE,  FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE];
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 	}
+
+	// dakanalyse (overgenomen uit TDAAnalytics_pandkenmerken_kwartaalupdate)
+	unit<uint8> stijlheid : nrofrows = 4
+	{
+		attribute<cm>     ClassBreaks: [0,15,120,200], DialogType = "Classification";
+		attribute<string> label      : ['vlak', 'licht stijl', 'redelijk stijk', 'stijl'], DialogType = "LabelText";
+		attribute<string> name       := replace(label,' ','_');
+		attribute<uint32> BrushColor : [rgb(235,235,235),rgb(165,165,165),rgb(95,95,95),rgb(25,25,25)], DialogType = "BrushColor";
+
+		container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> windstreek: nrofrows = 10
+	{
+		attribute<string> label: ['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW','vlak','onbekend'], DialogType = "LabelText";
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[
+			  rgb(255,  0,  0),rgb(128,128,  0)
+			 ,rgb(  0,255,  0),rgb(  0,255,255)
+			 ,rgb(  0,  0,255),rgb(128,128,255)
+			 ,rgb(255,255,  0),rgb(255,128,  0)
+			 ,rgb(235,235,235),rgb(255,255,255)
+			];
+		attribute<uint32> SymbolColor := BrushColor, DialogType = "SymbolColor";
+	}
+
+	unit<uint32> daktype_uint32 := combine(windstreek, stijlheid)
+	{
+		attribute<string> label := windstreek/label[first_rel] + '_' + stijlheid/label[second_rel];
+		attribute<uint8>  key   := first_rel * 10b + second_rel;
+	}
+
+	unit<uint8> daktype := range(uint8,0b,uint8(#daktype_uint32))
+	{
+		attribute<string> label := daktype_uint32/label[uint32(id(.))];
+		attribute<uint8>  key   := daktype_uint32/key[uint32(id(.))];
+	}
 }

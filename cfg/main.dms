@@ -15,16 +15,23 @@ container PHN
 {
 	container Parameters
 	{
-		parameter<string> BAG_FileDate   := '20260108';
+		parameter<string> BAG_FileDate   := '20261012'; // extractdatum van de BAG-snapshot (BAG-Tools/MakeSnapshot)
 		parameter<string> BAG_RecentYear := left(BAG_FileDate, 4);
-		parameter<string> BAG_Date       := '20260101';
+		parameter<string> BAG_Date       := '20261001'; // peildatum van de BAG-snapshot
 
 		// kwaliteitsdrempels (zie templates/bepaal_hoogtes_en_daken_T)
 		parameter<Units/cm_int32> min_pandhoogte      := 100[Units/cm_int32];   // < 1 m = fysiek onmogelijk pand -> onbetrouwbaar
 		parameter<Units/cm_int32> max_pandhoogte      := 25000[Units/cm_int32]; // > 250 m = geen NL-gebouw (hoogste ~215m) -> DSM-artefact -> onbetrouwbaar
 		parameter<uint32>         min_pixels_boven_mv := uint32(4);             // < 1 m2 dak boven maaiveld (0.5m grid) -> onbetrouwbaar
 	}
-	
+
+	// vereist door de store-dictionary van de BAG-snapshot (bag.mmd)
+	container eenheden
+	{
+		unit<int32> datum;
+		unit<int16> jaar;
+	}
+
 	#include <units.dms>
 	#include <classifications.dms>
 	#include <geography.dms>
@@ -38,8 +45,7 @@ container PHN
 		container Overridable
 		{
 			parameter<string> AHNDrive    := 'E:/SourceData/AHN';
-			parameter<string> BAG_DataDir := 'E:/SourceData/RuimteScanner/SD/RSOpen/Vastgoed';
-			parameter<string> RSo_DataDir := 'E:/SourceData/RuimteScanner/SD/RSOpen';
+			parameter<string> BAG_DIR     := 'D:/SourceData/BAG'; // map met BAG_<BAG_FileDate>_Snapshot_<BAG_Date>, zoals in BAG-Tools/MakeSnapshot
 		}
 	}
 }

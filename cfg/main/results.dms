@@ -71,7 +71,7 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			// int32: tif-waarden (cm, incl. hoogte-offset) kunnen boven 32767 uitkomen (Zuid-Limburg > ~228m NAP);
 			// int16-conversie wrapte daar naar negatief -> alle panden null
 			unit<ipoint> DTM
-			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DTM/'+Start/Tile_name+'_05m.tif'"
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DTM/'+Tile_name+'_05m.tif'"
 			,	StorageType     = "gdal.grid"
 			,	DialogData      = "rdc_meter"
 			,	StorageReadOnly = "True"
@@ -81,7 +81,7 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 				attribute<cm_int32>       height         := GridData[cm_int32];
 			}
 			unit<ipoint> DSM
-			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Start/Tile_name+'_05m.tif'"
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Tile_name+'_05m.tif'"
 			,	StorageType     = "gdal.grid"
 			,	DialogData      = "rdc_meter"
 			,	StorageReadOnly = "True"
@@ -93,7 +93,7 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			// OPTIONEEL: AHN-bron/provenance per cel (welke AHN-versie). Vereist <tile>_src.tif in de DSM-map.
 			// Ontbreken die bestanden -> dit unit + prov_local + ahn_bron_min/max + de twee union-regels uitcommenten.
 			unit<ipoint> DSM_src
-			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Start/Tile_name+'_src.tif'"
+			:	StorageName     = "='%AHNDrive%/AHN4_AHN5_AHN6/DSM/'+Tile_name+'_src.tif'"
 			,	StorageType     = "gdal.grid"
 			,	DialogData      = "rdc_meter"
 			,	StorageReadOnly = "True"
@@ -137,6 +137,18 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 			attribute<uint32>    n_pixels_boven_mv       (pand_subset) := Bepaal_hoogtes_en_daken/hoogte/impl/n_pixels_boven_mv;
 			attribute<uint8>     ahn_bron_min            (pand_subset) := ahn_bron_min_pand; // OPTIONEEL (provenance)
 			attribute<uint8>     ahn_bron_max            (pand_subset) := ahn_bron_max_pand; // OPTIONEEL (provenance)
+			attribute<float32>   inhoud                             (pand_subset) := float32(Bepaal_hoogtes_en_daken/inhoud/referentie/pand_inhoud_m3); // m3
+			attribute<float32>   ratio_ahn_waarn_tov_verwacht_waarn (pand_subset) := float32(Bepaal_hoogtes_en_daken/inhoud/referentie/ratio_ahn_waarn_tov_verwacht_waarn);
+			attribute<uint8>     perc_vlak                          (pand_subset) := Bepaal_hoogtes_en_daken/dak/perc_vlak;
+
+			unit<uint32> dakvlak := Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak
+			{
+				attribute<uint64>                    pand_identificatie := Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak/pand_identificatie;
+				attribute<uint32>                    nr_m2              := Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak/nr_m2;
+				attribute<Classifications/stijlheid>  co_stijlheid       := Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak/co_stijlheid;
+				attribute<Classifications/windstreek> windstreek         := Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak/windstreek_rel;
+				attribute<int32>                     hoogte             := int32(Bepaal_hoogtes_en_daken/dak/vlakken/pand_dakvlak/hoogte);
+			}
 		}
 
 		container GetResults 
@@ -167,6 +179,29 @@ container Results : Using = "Units;classifications;sourcedata;Geography;sourceda
 		attribute<uint32>    n_pixels_boven_mv       := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/n_pixels_boven_mv', ',')+ ')';
 		attribute<uint8>     ahn_bron_min            := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/ahn_bron_min', ',')+ ')'; // OPTIONEEL (provenance)
 		attribute<uint8>     ahn_bron_max            := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/ahn_bron_max', ',')+ ')'; // OPTIONEEL (provenance)
+		attribute<float32>   inhoud                             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/inhoud', ',')+ ')'; // m3
+		attribute<float32>   ratio_ahn_waarn_tov_verwacht_waarn := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/ratio_ahn_waarn_tov_verwacht_waarn', ',')+ ')';
+		attribute<uint8>     perc_vlak                          := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/perc_vlak', ',')+ ')';
+
+		// codelijsten, zelfbeschrijvend in de store
+		unit<uint8> stijlheid := Classifications/stijlheid
+		{
+			attribute<string> Label       := Classifications/stijlheid/label, DialogType = "LabelText";
+			attribute<cm>     ClassBreaks := Classifications/stijlheid/ClassBreaks;
+		}
+		unit<uint8> windstreek := Classifications/windstreek
+		{
+			attribute<string> Label := Classifications/windstreek/label, DialogType = "LabelText";
+		}
+
+		unit<uint32> dakvlak := ='union_unit(' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak', ',') + ')'
+		{
+			attribute<uint64>        pand_identificatie := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak/pand_identificatie', ',')+ ')';
+			attribute<uint32>        nr_m2              := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak/nr_m2', ',')+ ')';
+			attribute<../stijlheid>  co_stijlheid       := ='value(union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak/co_stijlheid', ',')+ '), ../stijlheid)';
+			attribute<../windstreek> windstreek         := ='value(union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak/windstreek', ',')+ '), ../windstreek)';
+			attribute<int32>         hoogte             := ='union_data(.,' + asList('Koppel_AHN_aan_Pand_perTile/' + Tiles_met_panden/name + '/ReadResults/dakvlak/hoogte', ',')+ ')';
+		}
 	}
 
 	unit<uint32> Read_Result
