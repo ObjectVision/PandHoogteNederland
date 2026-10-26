@@ -10,6 +10,28 @@ container AHN
 		attribute<string> name;
 		attribute<Geography/TileGrid/domain> TileGrid_rel := centroid(geometry)[Geography/TileGrid/domain];
 	}
+
+	// inwinperiode per kaartblad van AHN5 en AHN6 (mtime), voor ahn_inwinjaar (overgenomen uit TDAAnalytics_pandkenmerken_kwartaalupdate)
+	container dates
+	{
+		unit<uint32> AHN5_dsm_contours
+		:	StorageName     = "='%AHNDrive%/AHN5/KM_DSM_50cm.geojson'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<rdc_meter> geometry (poly);
+			attribute<string>    mtime;
+		}
+
+		unit<uint32> AHN6_dsm_contours
+		:	StorageName     = "='%AHNDrive%/AHN6/KM_DSM_50cm.geojson'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<rdc_meter> geometry (poly);
+			attribute<string>    mtime;
+		}
+	}
   
 	// container DTM := 
 	// 	for_each_ne(

@@ -15,19 +15,26 @@ container BAG
 		}
 
 		// de koppeling loopt over de labeltekst en niet over de volgorde van de codes
-		attribute<pand_status> pand_status_rel (store/status_pand) := rlookup(LowerCase(store/status_pand/Label), LowerCase(pand_status/Label));
+		attribute<pand_status> pand_status_rel      (store/status_pand)      := rlookup(LowerCase(store/status_pand/Label), LowerCase(pand_status/Label));
+		attribute<pand_status> pand_pand_status_rel (store/pand)             := pand_status_rel[store/pand/meta/status_rel];
+		attribute<bool>        plaats_aangewezen    (store/status_ligplaats) := LowerCase(store/status_ligplaats/Label) == 'plaats aangewezen';
 
-		container panden
+		// objectset van de EDM-pandkenmerken: panden met een EDM-status plus aangewezen lig- en standplaatsen
+		unit<uint32> pand_sel        := select_with_org_rel(pand_status/IsEDM[pand_pand_status_rel]);
+		unit<uint32> ligplaats_sel   := select_with_org_rel(plaats_aangewezen[store/ligplaats/meta/status_rel]);
+		unit<uint32> standplaats_sel := select_with_org_rel(plaats_aangewezen[store/standplaats/meta/status_rel]);
+
+		container objecten
 		{
-			unit<UInt32> src := store/pand
+			unit<UInt32> src := union_unit(pand_sel, ligplaats_sel, standplaats_sel)
 			{
-				attribute<rdc_meter>                    geometry_org (poly)          := store/pand/geometry[rdc_meter];
-				attribute<uint64>                       pand_bag_nr                  := store/pand/identificatie;
-				attribute<pand_status>                  status_rel                   := pand_status_rel[store/pand/meta/status_rel];
-				attribute<yr>                           Bouwjaar                     := value(store/pand/bouwjaar, yr);
+				attribute<rdc_meter>                    geometry_org (poly)          := union_data(., store/pand/geometry[pand_sel/org_rel], store/ligplaats/geometry[ligplaats_sel/org_rel], store/standplaats/geometry[standplaats_sel/org_rel])[rdc_meter];
+				attribute<uint64>                       pand_bag_nr                  := union_data(., store/pand/identificatie[pand_sel/org_rel], store/ligplaats/identificatie[ligplaats_sel/org_rel], store/standplaats/identificatie[standplaats_sel/org_rel]); // uniek over de objecttypen (objecttypecode in het nummer)
+				attribute<Classifications/objecttype>   objecttype                   := union_data(., const(Classifications/objecttype/V/pand, pand_sel), const(Classifications/objecttype/V/ligplaats, ligplaats_sel), const(Classifications/objecttype/V/standplaats, standplaats_sel));
+				attribute<Bool>                         IsVoorraad                   := union_data(., pand_status/IsVoorraad[pand_pand_status_rel[pand_sel/org_rel]], const(false, ligplaats_sel), const(false, standplaats_sel));
+				attribute<yr>                           Bouwjaar                     := union_data(., value(store/pand/bouwjaar[pand_sel/org_rel], yr), const((0 / 0)[yr], ligplaats_sel), const((0 / 0)[yr], standplaats_sel));
 				attribute<yr>                           Bouwjaar_trunc               := =replace(Bouwjaar_truncation_Expr, '@YYYY@', max_Bouwjaar);
 				attribute<m2>                           Footprint                    := area(geometry, m2);
-				attribute<Bool>                         IsVoorraad                   := pand_status/isVoorraad[status_rel];
 				attribute<rdc_meter>                    geometry (poly)              := recollect_by_cond(Impl/HasNegativearea, Impl/select_reversed_winding_order/geometry_reversed, geometry_org);
 
 				// attribute<bool> IsStudyArea := IsNoord_Holland; // const(TRUE, .);
@@ -69,15 +76,12 @@ container BAG
 																							'&& IsStudyArea';
 				}
 			}
-
-			unit<UInt32> pand := select_with_attr_by_org_rel(src, src/Impl/pand_selection_condition);
 		}
 	}
 
-	// de peildatum zit al in de snapshot, hier alleen nog de voorraadselectie
-	attribute<Bool> pand_selection_condition (Snapshot/panden/pand) := Snapshot/panden/pand/IsVoorraad;
-	unit<UInt32> pand := select_with_attr_by_cond(Snapshot/panden/pand, pand_selection_condition)
-	, Descr = "set met panden op de peildatum (Parameters/BAG_Date) die voorraad zijn volgens de CBS definitie."
+	// de peildatum zit al in de snapshot; IsVoorraad geeft de voorraad volgens de CBS definitie
+	unit<UInt32> pand := select_with_attr_by_org_rel(Snapshot/objecten/src, Snapshot/objecten/src/Impl/pand_selection_condition)
+	, Descr = "panden (EDM-statussen) en aangewezen lig- en standplaatsen op de peildatum (Parameters/BAG_Date); objecttype onderscheidt ze."
 	{
 		attribute<AHN/Tiles> Tile_rel := point_in_polygon(centroid_or_mid(geometry), AHN/Tiles/geometry);
 	}

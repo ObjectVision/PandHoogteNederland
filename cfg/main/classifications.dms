@@ -19,7 +19,14 @@ container Classifications : Using = "Units"
 		attribute<String>    Label      : ['Bouw gestart','Bouwvergunning verleend','Niet gerealiseerd pand','Pand buiten gebruik','Pand gesloopt','Pand in gebruik','Pand in gebruik (niet ingemeten)','Sloopvergunning verleend','Pand ten onrechte opgevoerd','Verbouwing pand'], DialogType = "LabelText";
 		attribute<String>    name       := replace(Label, ' ', '_', '-', '_', '(', '', ')', '');
 		attribute<Bool>      IsVoorraad      : [FALSE,  FALSE, FALSE, TRUE,  FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE];
+		attribute<Bool>      IsEDM           : [TRUE,   TRUE,  FALSE, TRUE,  FALSE, TRUE,  TRUE,  TRUE,  FALSE, TRUE]; // objectset van de EDM-pandkenmerken (TDAAnalytics_pandkenmerken_kwartaalupdate)
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+	}
+
+	unit<uint8> objecttype : nrofrows = 3
+	{
+		attribute<string> label : ['pand', 'ligplaats', 'standplaats'], DialogType = "LabelText";
+		container V := for_each_nedv(label, 'value('+string(id(.))+', ..)', void, .);
 	}
 
 	// dakanalyse (overgenomen uit TDAAnalytics_pandkenmerken_kwartaalupdate)
